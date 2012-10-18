@@ -10,10 +10,6 @@ public interface LoaderCallbackInterface
      */
     static final int SUCCESS = 0;
     /**
-     * OpenCV library installation via Google Play service has been initialized. Restart the application.
-     */
-    static final int RESTART_REQUIRED = 1;
-    /**
      * Google Play Market cannot be invoked.
      */
     static final int MARKET_ERROR = 2;
@@ -40,5 +36,5 @@ public interface LoaderCallbackInterface
      * Callback method, called in case the package installation is needed.
      * @param callback answer object with approve and cancel methods and the package description.
      */
-    public void onPackageInstall(InstallCallbackInterface callback);
+    public void onPackageInstall(final int operation, InstallCallbackInterface callback);
 };

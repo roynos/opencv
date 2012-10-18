@@ -251,12 +251,12 @@ public:
         ify(_ify)
     {
     }
-    
+
     virtual void operator() (const Range& range) const
     {
         Size ssize = src.size(), dsize = dst.size();
         int y, x, pix_size = (int)src.elemSize();
-        
+
         for( y = range.start; y < range.end; y++ )
         {
             uchar* D = dst.data + dst.step*y;
@@ -327,7 +327,7 @@ public:
             }
         }
     }
-    
+
 private:
     const Mat src;
     Mat dst;
@@ -354,10 +354,10 @@ resizeNN( const Mat& src, Mat& dst, double fx, double fy )
         int sx = cvFloor(x*ifx);
         x_ofs[x] = std::min(sx, ssize.width-1)*pix_size;
     }
-    
+
     Range range(0, dsize.height);
     resizeNNInvoker invoker(src, dst, x_ofs, pix_size4, ify);
-    parallel_for_(range, invoker);
+    parallel_for_(range, invoker, dst.total()/(double)(1<<16));
 }
 
 
@@ -1132,7 +1132,7 @@ public:
     typedef typename HResize::value_type T;
     typedef typename HResize::buf_type WT;
     typedef typename HResize::alpha_type AT;
-    
+
     resizeGeneric_Invoker(const Mat& _src, Mat &_dst, const int *_xofs, const int *_yofs,
         const AT* _alpha, const AT* __beta, const Size& _ssize, const Size &_dsize,
         int _ksize, int _xmin, int _xmax) :
@@ -1141,13 +1141,13 @@ public:
         ksize(_ksize), xmin(_xmin), xmax(_xmax)
     {
     }
-    
+
     virtual void operator() (const Range& range) const
     {
         int dy, cn = src.channels();
         HResize hresize;
         VResize vresize;
-        
+
         int bufstep = (int)alignSize(dsize.width, 16);
         AutoBuffer<WT> _buffer(bufstep*ksize);
         const T* srows[MAX_ESIZE]={0};
@@ -1159,9 +1159,9 @@ public:
             prev_sy[k] = -1;
             rows[k] = (WT*)_buffer + bufstep*k;
         }
-        
+
         const AT* beta = _beta + ksize * range.start;
-        
+
         for( dy = range.start; dy < range.end; dy++, beta += ksize )
         {
             int sy0 = yofs[dy], k0=ksize, k1=0, ksize2 = ksize/2;
@@ -1190,17 +1190,14 @@ public:
             vresize( (const WT**)rows, (T*)(dst.data + dst.step*dy), beta, dsize.width );
         }
     }
-    
+
 private:
-    const Mat src;
+    Mat src;
     Mat dst;
     const int* xofs, *yofs;
     const AT* alpha, *_beta;
-    const Size ssize, dsize;
-    const int ksize, xmin, xmax;
-
-    resizeGeneric_Invoker(const resizeGeneric_Invoker&);
-    resizeGeneric_Invoker& operator=(const resizeGeneric_Invoker&);
+    Size ssize, dsize;
+    int ksize, xmin, xmax;
 };
 
 template<class HResize, class VResize>
@@ -1221,11 +1218,11 @@ static void resizeGeneric_( const Mat& src, Mat& dst,
     xmin *= cn;
     xmax *= cn;
     // image resize is a separable operation. In case of not too strong
-    
+
     Range range(0, dsize.height);
     resizeGeneric_Invoker<HResize, VResize> invoker(src, dst, xofs, yofs, (const AT*)_alpha, beta,
         ssize, dsize, ksize, xmin, xmax);
-    parallel_for_(range, invoker);
+    parallel_for_(range, invoker, dst.total()/(double)(1<<16));
 }
 
 template <typename T, typename WT>
@@ -1236,61 +1233,58 @@ struct ResizeAreaFastNoVec
     int operator() (const T* /*S*/, T* /*D*/, int /*w*/) const { return 0; }
 };
 
-template <typename T, typename WT>
-struct ResizeAreaFast_2x2_8u
+template<typename T>
+struct ResizeAreaFastVec
 {
-    ResizeAreaFast_2x2_8u(int _scale_x, int _scale_y, int _cn, int _step/*, const int* _ofs*/) :
+    ResizeAreaFastVec(int _scale_x, int _scale_y, int _cn, int _step/*, const int* _ofs*/) :
         scale_x(_scale_x), scale_y(_scale_y), cn(_cn), step(_step)/*, ofs(_ofs)*/
-    { 
-        fast_mode = scale_x == 2 && scale_y == 2 && (cn == 1 || cn == 3 || cn == 4); 
+    {
+        fast_mode = scale_x == 2 && scale_y == 2 && (cn == 1 || cn == 3 || cn == 4);
     }
-    
+
     int operator() (const T* S, T* D, int w) const
     {
         if( !fast_mode )
             return 0;
-        
-        const T* nextS = S + step;
+
+        const T* nextS = (const T*)((const uchar*)S + step);
         int dx = 0;
-        
+
         if (cn == 1)
-        for( ; dx < w; ++dx )
-        {
-            int index = dx*2;
-            D[dx] = (S[index] + S[index+1] + nextS[index] + nextS[index+1] + 2) >> 2;
-        }
-        else if (cn == 3)
-        for( ; dx < w; dx += 3 )
-        {
-            int index = dx*2;
-            D[dx] = (S[index] + S[index+3] + nextS[index] + nextS[index+3] + 2) >> 2;
-            D[dx+1] = (S[index+1] + S[index+4] + nextS[index+1] + nextS[index+4] + 2) >> 2;
-            D[dx+2] = (S[index+2] + S[index+5] + nextS[index+2] + nextS[index+5] + 2) >> 2;
-        }
-        else
-        {
-            assert(cn == 4);
-            for( ; dx < w; dx += 4 )
+            for( ; dx < w; ++dx )
             {
                 int index = dx*2;
-                D[dx] = (S[index] + S[index+4] + nextS[index] + nextS[index+4] + 2) >> 2;
-                D[dx+1] = (S[index+1] + S[index+5] + nextS[index+1] + nextS[index+5] + 2) >> 2;
-                D[dx+2] = (S[index+2] + S[index+6] + nextS[index+2] + nextS[index+6] + 2) >> 2;
-                D[dx+3] = (S[index+3] + S[index+7] + nextS[index+3] + nextS[index+7] + 2) >> 2;
+                D[dx] = (T)((S[index] + S[index+1] + nextS[index] + nextS[index+1] + 2) >> 2);
             }
-        }
-        
+        else if (cn == 3)
+            for( ; dx < w; dx += 3 )
+            {
+                int index = dx*2;
+                D[dx] = (T)((S[index] + S[index+3] + nextS[index] + nextS[index+3] + 2) >> 2);
+                D[dx+1] = (T)((S[index+1] + S[index+4] + nextS[index+1] + nextS[index+4] + 2) >> 2);
+                D[dx+2] = (T)((S[index+2] + S[index+5] + nextS[index+2] + nextS[index+5] + 2) >> 2);
+            }
+        else
+            {
+                assert(cn == 4);
+                for( ; dx < w; dx += 4 )
+                {
+                    int index = dx*2;
+                    D[dx] = (T)((S[index] + S[index+4] + nextS[index] + nextS[index+4] + 2) >> 2);
+                    D[dx+1] = (T)((S[index+1] + S[index+5] + nextS[index+1] + nextS[index+5] + 2) >> 2);
+                    D[dx+2] = (T)((S[index+2] + S[index+6] + nextS[index+2] + nextS[index+6] + 2) >> 2);
+                    D[dx+3] = (T)((S[index+3] + S[index+7] + nextS[index+3] + nextS[index+7] + 2) >> 2);
+                }
+            }
+
         return dx;
     }
-    
-private:
-    const int scale_x, scale_y;
-    const int cn;
-    bool fast_mode;
-    const int step;
 
-    ResizeAreaFast_2x2_8u(const ResizeAreaFast_2x2_8u&);
-    ResizeAreaFast_2x2_8u& operator=(const ResizeAreaFast_2x2_8u&);
+private:
+    int scale_x, scale_y;
+    int cn;
+    bool fast_mode;
+    int step;
 };
 
 template <typename T, typename WT, typename VecOp>
@@ -1304,7 +1298,7 @@ public:
         scale_y(_scale_y), ofs(_ofs), xofs(_xofs)
     {
     }
-    
+
     virtual void operator() (const Range& range) const
     {
         Size ssize = src.size(), dsize = dst.size();
@@ -1315,15 +1309,15 @@ public:
         dsize.width *= cn;
         ssize.width *= cn;
         int dy, dx, k = 0;
-        
+
         VecOp vop(scale_x, scale_y, src.channels(), (int)src.step/*, area_ofs*/);
-        
+
         for( dy = range.start; dy < range.end; dy++ )
         {
             T* D = (T*)(dst.data + dst.step*dy);
             int sy0 = dy*scale_y;
             int w = sy0 + scale_y <= ssize.height ? dwidth1 : 0;
-            
+
             if( sy0 >= ssize.height )
             {
                 for( dx = 0; dx < dsize.width; dx++ )
@@ -1372,15 +1366,12 @@ public:
             }
         }
     }
-    
-private:
-    const Mat src;
-    Mat dst;
-    const int scale_x, scale_y;
-    const int *ofs, *xofs;
 
-    resizeAreaFast_Invoker(const resizeAreaFast_Invoker&);
-    resizeAreaFast_Invoker& operator=(const resizeAreaFast_Invoker&);
+private:
+    Mat src;
+    Mat dst;
+    int scale_x, scale_y;
+    const int *ofs, *xofs;
 };
 
 template<typename T, typename WT, typename VecOp>
@@ -1388,9 +1379,9 @@ static void resizeAreaFast_( const Mat& src, Mat& dst, const int* ofs, const int
                              int scale_x, int scale_y )
 {
     Range range(0, dst.rows);
-    resizeAreaFast_Invoker<T, WT, VecOp> invoker(src, dst, scale_x, 
+    resizeAreaFast_Invoker<T, WT, VecOp> invoker(src, dst, scale_x,
         scale_y, ofs, xofs);
-    parallel_for_(range, invoker);
+    parallel_for_(range, invoker, dst.total()/(double)(1<<16));
 }
 
 struct DecimateAlpha
@@ -1404,16 +1395,16 @@ class resizeArea_Invoker :
     public ParallelLoopBody
 {
 public:
-    resizeArea_Invoker(const Mat& _src, Mat& _dst, const DecimateAlpha* _xofs, 
-        int _xofs_count, double _scale_y_, const int* _cur_dy_ofs, 
+    resizeArea_Invoker(const Mat& _src, Mat& _dst, const DecimateAlpha* _xofs,
+        int _xofs_count, double _scale_y_, const int* _cur_dy_ofs,
         const std::vector<std::pair<int, int> >& _bands) :
-        ParallelLoopBody(), src(_src), dst(_dst), xofs(_xofs), 
+        ParallelLoopBody(), src(_src), dst(_dst), xofs(_xofs),
         xofs_count(_xofs_count), scale_y_(_scale_y_),
         cur_dy_ofs(_cur_dy_ofs), bands(_bands)
     {
     }
-    
-    void resize_signle_band(const Range& range) const 
+
+    void resize_single_band(const Range& range) const
     {
         Size ssize = src.size(), dsize = dst.size();
         int cn = src.channels();
@@ -1422,11 +1413,11 @@ public:
         WT *buf = _buffer, *sum = buf + dsize.width;
         int k = 0, sy = 0, dx = 0, cur_dy = 0;
         WT scale_y = (WT)scale_y_;
-        
+
         CV_Assert( cn <= 4 );
         for( dx = 0; dx < dsize.width; dx++ )
             buf[dx] = sum[dx] = 0;
-        
+
         cur_dy = cur_dy_ofs[range.start];
         for (sy = range.start; sy < range.end; sy++)
         {
@@ -1472,7 +1463,7 @@ public:
                     t1 = buf[dxn+3] + S[sxn+3]*alpha;
                     buf[dxn+2] = t0; buf[dxn+3] = t1;
                 }
-            
+
             if( (cur_dy + 1)*scale_y <= sy + 1 || sy == ssize.height - 1 )
             {
                 WT beta = std::max(sy + 1 - (cur_dy+1)*scale_y, (WT)0);
@@ -1490,7 +1481,7 @@ public:
                 }
                 else
                     for( dx = 0; dx < dsize.width; dx++ )
-                    {                        
+                    {
                         D[dx] = saturate_cast<T>((sum[dx] + buf[dx]* beta1)/ min(scale_y, src.rows - cur_dy*scale_y)); //
                         sum[dx] = buf[dx]*beta;
                         buf[dx] = 0;
@@ -1514,27 +1505,24 @@ public:
             }
         }
     }
-    
+
     virtual void operator() (const Range& range) const
     {
         for (int i = range.start; i < range.end; ++i)
         {
             Range band_range(bands[i].first, bands[i].second);
-            resize_signle_band(band_range);
+            resize_single_band(band_range);
         }
     }
-    
+
 private:
-    const Mat src;
+    Mat src;
     Mat dst;
     const DecimateAlpha* xofs;
-    const int xofs_count;
-    const double scale_y_;
+    int xofs_count;
+    double scale_y_;
     const int *cur_dy_ofs;
     std::vector<std::pair<int, int> > bands;
-    
-    resizeArea_Invoker(const resizeArea_Invoker&);
-    resizeArea_Invoker& operator=(const resizeArea_Invoker&);
 };
 
 template <typename T, typename WT>
@@ -1545,11 +1533,11 @@ static void resizeArea_( const Mat& src, Mat& dst, const DecimateAlpha* xofs, in
     int *cur_dy_ofs = _yofs;
     int cur_dy = 0, index = 0;
     std::vector<std::pair<int, int> > bands;
-    
+
     for (int sy = 0; sy < ssize.height; sy++)
     {
         cur_dy_ofs[sy] = cur_dy;
-        
+
         if ((cur_dy + 1) * scale_y_ <= sy + 1 || sy == ssize.height - 1 )
         {
             WT beta = (WT)std::max(sy + 1 - (cur_dy + 1) * scale_y_, 0.);
@@ -1564,9 +1552,10 @@ static void resizeArea_( const Mat& src, Mat& dst, const DecimateAlpha* xofs, in
         }
     }
 
-    Range range(0, bands.size());
+    Range range(0, (int)bands.size());
     resizeArea_Invoker<T, WT> invoker(src, dst, xofs, xofs_count, scale_y_, cur_dy_ofs, bands);
-    parallel_for_(range, invoker);
+    //parallel_for_(range, invoker);
+    invoker(Range(range.start, range.end));
 }
 
 
@@ -1580,7 +1569,7 @@ typedef void (*ResizeAreaFastFunc)( const Mat& src, Mat& dst,
                                     int scale_x, int scale_y );
 
 typedef void (*ResizeAreaFunc)( const Mat& src, Mat& dst,
-                                const DecimateAlpha* xofs, int xofs_count, 
+                                const DecimateAlpha* xofs, int xofs_count,
                                 double scale_y_);
 
 }
@@ -1678,10 +1667,10 @@ void cv::resize( InputArray _src, OutputArray _dst, Size dsize,
 
     static ResizeAreaFastFunc areafast_tab[] =
     {
-        resizeAreaFast_<uchar, int, ResizeAreaFast_2x2_8u<uchar, int> >, 
+        resizeAreaFast_<uchar, int, ResizeAreaFastVec<uchar> >,
         0,
-        resizeAreaFast_<ushort, float, ResizeAreaFastNoVec<ushort, float> >,
-        resizeAreaFast_<short, float, ResizeAreaFastNoVec<short, float> >,
+        resizeAreaFast_<ushort, float, ResizeAreaFastVec<ushort> >,
+        resizeAreaFast_<short, float, ResizeAreaFastVec<short> >,
         0,
         resizeAreaFast_<float, float, ResizeAreaFastNoVec<float, float> >,
         resizeAreaFast_<double, double, ResizeAreaFastNoVec<double, double> >,
@@ -1690,7 +1679,7 @@ void cv::resize( InputArray _src, OutputArray _dst, Size dsize,
 
     static ResizeAreaFunc area_tab[] =
     {
-        resizeArea_<uchar, float>, 0, resizeArea_<ushort, float>, 
+        resizeArea_<uchar, float>, 0, resizeArea_<ushort, float>,
         resizeArea_<short, float>, 0, resizeArea_<float, float>,
         resizeArea_<double, double>, 0
     };
@@ -1729,21 +1718,19 @@ void cv::resize( InputArray _src, OutputArray _dst, Size dsize,
         resizeNN( src, dst, inv_scale_x, inv_scale_y );
         return;
     }
-    
+
     {
         int iscale_x = saturate_cast<int>(scale_x);
         int iscale_y = saturate_cast<int>(scale_y);
-        
+
         bool is_area_fast = std::abs(scale_x - iscale_x) < DBL_EPSILON &&
                 std::abs(scale_y - iscale_y) < DBL_EPSILON;
-            
-        // in case of scale_x && scale_y is equal to 2 
+
+        // in case of scale_x && scale_y is equal to 2
         // INTER_AREA (fast) also is equal to INTER_LINEAR
-        if ( interpolation == INTER_LINEAR && std::abs(scale_x - 2.0) < DBL_EPSILON &&
-            std::abs(scale_y - 2.0) < DBL_EPSILON)
+        if( interpolation == INTER_LINEAR && is_area_fast && iscale_x == 2 && iscale_y == 2 )
         {
             interpolation = INTER_AREA;
-            is_area_fast = true;
         }
 
         // true "area" interpolation is only implemented for the case (scale_x <= 1 && scale_y <= 1).
@@ -1814,7 +1801,7 @@ void cv::resize( InputArray _src, OutputArray _dst, Size dsize,
                     xofs[k++].alpha = (float)(min(fsx2 - sx2, 1.) / min(scale_x, src.cols - fsx1));
                 }
             }
-            
+
             func( src, dst, xofs, k, scale_y);
             return;
         }
@@ -2693,26 +2680,26 @@ typedef void (*RemapFunc)(const Mat& _src, Mat& _dst, const Mat& _xy,
                           const Mat& _fxy, const void* _wtab,
                           int borderType, const Scalar& _borderValue);
 
-class remapInvoker :
+class RemapInvoker :
     public ParallelLoopBody
 {
 public:
-    remapInvoker(const Mat& _src, Mat _dst, const Mat& _map1, const Mat& _map2, const Mat *_m1, 
+    RemapInvoker(const Mat& _src, Mat& _dst, const Mat *_m1,
                  const Mat *_m2, int _interpolation, int _borderType, const Scalar &_borderValue,
                  int _planar_input, RemapNNFunc _nnfunc, RemapFunc _ifunc, const void *_ctab) :
-        ParallelLoopBody(), src(_src), dst(_dst), map1(_map1), map2(_map2), m1(_m1), m2(_m2),
-        interpolation(_interpolation), borderType(_borderType), borderValue(_borderValue), 
+        ParallelLoopBody(), src(&_src), dst(&_dst), m1(_m1), m2(_m2),
+        interpolation(_interpolation), borderType(_borderType), borderValue(_borderValue),
         planar_input(_planar_input), nnfunc(_nnfunc), ifunc(_ifunc), ctab(_ctab)
-    {    
-    }   
-     
+    {
+    }
+
     virtual void operator() (const Range& range) const
     {
         int x, y, x1, y1;
         const int buf_size = 1 << 14;
-        int brows0 = std::min(128, dst.rows), map_depth = map1.depth();
-        int bcols0 = std::min(buf_size/brows0, dst.cols);
-        brows0 = std::min(buf_size/bcols0, dst.rows);
+        int brows0 = std::min(128, dst->rows), map_depth = m1->depth();
+        int bcols0 = std::min(buf_size/brows0, dst->cols);
+        brows0 = std::min(buf_size/bcols0, dst->rows);
     #if CV_SSE2
         bool useSIMD = checkHardwareSupport(CV_CPU_SSE2);
     #endif
@@ -2723,17 +2710,17 @@ public:
 
         for( y = range.start; y < range.end; y += brows0 )
         {
-            for( x = 0; x < dst.cols; x += bcols0 )
+            for( x = 0; x < dst->cols; x += bcols0 )
             {
                 int brows = std::min(brows0, range.end - y);
-                int bcols = std::min(bcols0, dst.cols - x);
-                Mat dpart(dst, Rect(x, y, bcols, brows));
+                int bcols = std::min(bcols0, dst->cols - x);
+                Mat dpart(*dst, Rect(x, y, bcols, brows));
                 Mat bufxy(_bufxy, Rect(0, 0, bcols, brows));
 
                 if( nnfunc )
                 {
-                    if( map1.type() == CV_16SC2 && !map2.data ) // the data is already in the right format
-                        bufxy = map1(Rect(x, y, bcols, brows));
+                    if( m1->type() == CV_16SC2 && !m2->data ) // the data is already in the right format
+                        bufxy = (*m1)(Rect(x, y, bcols, brows));
                     else if( map_depth != CV_32F )
                     {
                         for( y1 = 0; y1 < brows; y1++ )
@@ -2751,14 +2738,14 @@ public:
                         }
                     }
                     else if( !planar_input )
-                        map1(Rect(x, y, bcols, brows)).convertTo(bufxy, bufxy.depth());
+                        (*m1)(Rect(x, y, bcols, brows)).convertTo(bufxy, bufxy.depth());
                     else
                     {
                         for( y1 = 0; y1 < brows; y1++ )
                         {
                             short* XY = (short*)(bufxy.data + bufxy.step*y1);
-                            const float* sX = (const float*)(map1.data + map1.step*(y+y1)) + x;
-                            const float* sY = (const float*)(map2.data + map2.step*(y+y1)) + x;
+                            const float* sX = (const float*)(m1->data + m1->step*(y+y1)) + x;
+                            const float* sY = (const float*)(m2->data + m2->step*(y+y1)) + x;
                             x1 = 0;
 
                         #if CV_SSE2
@@ -2791,7 +2778,7 @@ public:
                             }
                         }
                     }
-                    nnfunc( src, dpart, bufxy, borderType, borderValue );
+                    nnfunc( *src, dpart, bufxy, borderType, borderValue );
                     continue;
                 }
 
@@ -2801,16 +2788,15 @@ public:
                     short* XY = (short*)(bufxy.data + bufxy.step*y1);
                     ushort* A = (ushort*)(bufa.data + bufa.step*y1);
 
-                    if( (map1.type() == CV_16SC2 && (map2.type() == CV_16UC1 || map2.type() == CV_16SC1)) ||
-                        (map2.type() == CV_16SC2 && (map1.type() == CV_16UC1 || map1.type() == CV_16SC1)) )
+                    if( m1->type() == CV_16SC2 && (m2->type() == CV_16UC1 || m2->type() == CV_16SC1) )
                     {
-                        bufxy = m1->operator()(Rect(x, y, bcols, brows));
-                        bufa = m2->operator()(Rect(x, y, bcols, brows));
+                        bufxy = (*m1)(Rect(x, y, bcols, brows));
+                        bufa = (*m2)(Rect(x, y, bcols, brows));
                     }
                     else if( planar_input )
                     {
-                        const float* sX = (const float*)(map1.data + map1.step*(y+y1)) + x;
-                        const float* sY = (const float*)(map2.data + map2.step*(y+y1)) + x;
+                        const float* sX = (const float*)(m1->data + m1->step*(y+y1)) + x;
+                        const float* sY = (const float*)(m2->data + m2->step*(y+y1)) + x;
 
                         x1 = 0;
                     #if CV_SSE2
@@ -2863,7 +2849,7 @@ public:
                     }
                     else
                     {
-                        const float* sXY = (const float*)(map1.data + map1.step*(y+y1)) + x*2;
+                        const float* sXY = (const float*)(m1->data + m1->step*(y+y1)) + x*2;
 
                         for( x1 = 0; x1 < bcols; x1++ )
                         {
@@ -2876,24 +2862,21 @@ public:
                         }
                     }
                 }
-                ifunc(src, dpart, bufxy, bufa, ctab, borderType, borderValue);
+                ifunc(*src, dpart, bufxy, bufa, ctab, borderType, borderValue);
             }
         }
     }
-    
+
 private:
-    const Mat src;
-    Mat dst;
-    const Mat map1, map2, *m1, *m2;
+    const Mat* src;
+    Mat* dst;
+    const Mat *m1, *m2;
     int interpolation, borderType;
-    const Scalar borderValue;
+    Scalar borderValue;
     int planar_input;
     RemapNNFunc nnfunc;
     RemapFunc ifunc;
     const void *ctab;
-
-    remapInvoker(const remapInvoker&);
-    remapInvoker& operator=(const remapInvoker&);
 };
 
 }
@@ -2976,8 +2959,8 @@ void cv::remap( InputArray _src, OutputArray _dst,
 
     const Mat *m1 = &map1, *m2 = &map2;
 
-    if( (map1.type() == CV_16SC2 && (map2.type() == CV_16UC1 || map2.type() == CV_16SC1)) ||
-        (map2.type() == CV_16SC2 && (map1.type() == CV_16UC1 || map1.type() == CV_16SC1)) )
+    if( (map1.type() == CV_16SC2 && (map2.type() == CV_16UC1 || map2.type() == CV_16SC1 || !map2.data)) ||
+        (map2.type() == CV_16SC2 && (map1.type() == CV_16UC1 || map1.type() == CV_16SC1 || !map1.data)) )
     {
         if( map1.type() != CV_16SC2 )
             std::swap(m1, m2);
@@ -2989,11 +2972,10 @@ void cv::remap( InputArray _src, OutputArray _dst,
         planar_input = map1.channels() == 1;
     }
 
-    Range range(0, dst.rows);
-    remapInvoker invoker(src, dst, map1, map2, m1, m2, interpolation, 
+    RemapInvoker invoker(src, dst, m1, m2, interpolation,
                          borderType, borderValue, planar_input, nnfunc, ifunc,
                          ctab);
-    parallel_for_(range, invoker);
+    parallel_for_(Range(0, dst.rows), invoker, dst.total()/(double)(1<<16));
 }
 
 
@@ -3135,33 +3117,33 @@ void cv::convertMaps( InputArray _map1, InputArray _map2,
     }
 }
 
-    
+
 namespace cv
 {
 
-class warpAffineInvoker :   
+class warpAffineInvoker :
     public ParallelLoopBody
 {
 public:
-    warpAffineInvoker(const Mat &_src, Mat &_dst, int _interpolation, int _borderType, 
+    warpAffineInvoker(const Mat &_src, Mat &_dst, int _interpolation, int _borderType,
                       const Scalar &_borderValue, int *_adelta, int *_bdelta, double *_M) :
         ParallelLoopBody(), src(_src), dst(_dst), interpolation(_interpolation),
         borderType(_borderType), borderValue(_borderValue), adelta(_adelta), bdelta(_bdelta),
         M(_M)
     {
     }
-    
+
     virtual void operator() (const Range& range) const
     {
         const int BLOCK_SZ = 64;
         short XY[BLOCK_SZ*BLOCK_SZ*2], A[BLOCK_SZ*BLOCK_SZ];
         const int AB_BITS = MAX(10, (int)INTER_BITS);
-        const int AB_SCALE = 1 << AB_BITS;  
+        const int AB_SCALE = 1 << AB_BITS;
         int round_delta = interpolation == INTER_NEAREST ? AB_SCALE/2 : AB_SCALE/INTER_TAB_SIZE/2, x, y, x1, y1;
     #if CV_SSE2
         bool useSIMD = checkHardwareSupport(CV_CPU_SSE2);
     #endif
-        
+
         int bh0 = std::min(BLOCK_SZ/2, dst.rows);
         int bw0 = std::min(BLOCK_SZ*BLOCK_SZ/bh0, dst.cols);
         bh0 = std::min(BLOCK_SZ*BLOCK_SZ/bw0, dst.rows);
@@ -3250,22 +3232,19 @@ public:
             }
         }
     }
-    
+
 private:
-    const Mat src;
+    Mat src;
     Mat dst;
     int interpolation, borderType;
-    const Scalar borderValue;
+    Scalar borderValue;
     int *adelta, *bdelta;
     double *M;
-
-    warpAffineInvoker(const warpAffineInvoker&);
-    warpAffineInvoker& operator=(const warpAffineInvoker&);
 };
 
 }
-    
-    
+
+
 void cv::warpAffine( InputArray _src, OutputArray _dst,
                      InputArray _M0, Size dsize,
                      int flags, int borderType, const Scalar& borderValue )
@@ -3318,7 +3297,7 @@ void cv::warpAffine( InputArray _src, OutputArray _dst,
     Range range(0, dst.rows);
     warpAffineInvoker invoker(src, dst, interpolation, borderType,
                               borderValue, adelta, bdelta, M);
-    parallel_for_(range, invoker);
+    parallel_for_(range, invoker, dst.total()/(double)(1<<16));
 }
 
 
@@ -3329,41 +3308,41 @@ class warpPerspectiveInvoker :
     public ParallelLoopBody
 {
 public:
-    
+
     warpPerspectiveInvoker(const Mat &_src, Mat &_dst, double *_M, int _interpolation,
                            int _borderType, const Scalar &_borderValue) :
         ParallelLoopBody(), src(_src), dst(_dst), M(_M), interpolation(_interpolation),
         borderType(_borderType), borderValue(_borderValue)
     {
     }
-    
+
     virtual void operator() (const Range& range) const
     {
         const int BLOCK_SZ = 32;
         short XY[BLOCK_SZ*BLOCK_SZ*2], A[BLOCK_SZ*BLOCK_SZ];
         int x, y, x1, y1, width = dst.cols, height = dst.rows;
-        
+
         int bh0 = std::min(BLOCK_SZ/2, height);
         int bw0 = std::min(BLOCK_SZ*BLOCK_SZ/bh0, width);
         bh0 = std::min(BLOCK_SZ*BLOCK_SZ/bw0, height);
-        
+
         for( y = range.start; y < range.end; y += bh0 )
         {
             for( x = 0; x < width; x += bw0 )
             {
                 int bw = std::min( bw0, width - x);
                 int bh = std::min( bh0, range.end - y); // height
-                
+
                 Mat _XY(bh, bw, CV_16SC2, XY), matA;
                 Mat dpart(dst, Rect(x, y, bw, bh));
-                
+
                 for( y1 = 0; y1 < bh; y1++ )
                 {
                     short* xy = XY + y1*bw*2;
                     double X0 = M[0]*x + M[1]*(y + y1) + M[2];
                     double Y0 = M[3]*x + M[4]*(y + y1) + M[5];
                     double W0 = M[6]*x + M[7]*(y + y1) + M[8];
-                    
+
                     if( interpolation == INTER_NEAREST )
                         for( x1 = 0; x1 < bw; x1++ )
                         {
@@ -3373,7 +3352,7 @@ public:
                             double fY = std::max((double)INT_MIN, std::min((double)INT_MAX, (Y0 + M[3]*x1)*W));
                             int X = saturate_cast<int>(fX);
                             int Y = saturate_cast<int>(fY);
-                            
+
                             xy[x1*2] = saturate_cast<short>(X);
                             xy[x1*2+1] = saturate_cast<short>(Y);
                         }
@@ -3388,7 +3367,7 @@ public:
                             double fY = std::max((double)INT_MIN, std::min((double)INT_MAX, (Y0 + M[3]*x1)*W));
                             int X = saturate_cast<int>(fX);
                             int Y = saturate_cast<int>(fY);
-                            
+
                             xy[x1*2] = saturate_cast<short>(X >> INTER_BITS);
                             xy[x1*2+1] = saturate_cast<short>(Y >> INTER_BITS);
                             alpha[x1] = (short)((Y & (INTER_TAB_SIZE-1))*INTER_TAB_SIZE +
@@ -3396,7 +3375,7 @@ public:
                         }
                     }
                 }
-                
+
                 if( interpolation == INTER_NEAREST )
                     remap( src, dpart, _XY, Mat(), interpolation, borderType, borderValue );
                 else
@@ -3407,17 +3386,15 @@ public:
             }
         }
     }
-    
+
 private:
-    const Mat src;
+    Mat src;
     Mat dst;
     double* M;
     int interpolation, borderType;
-    const Scalar borderValue;
-    warpPerspectiveInvoker(const warpPerspectiveInvoker&);
-    warpPerspectiveInvoker& operator=(const warpPerspectiveInvoker&);
+    Scalar borderValue;
 };
-    
+
 }
 
 void cv::warpPerspective( InputArray _src, OutputArray _dst, InputArray _M0,
@@ -3450,7 +3427,7 @@ void cv::warpPerspective( InputArray _src, OutputArray _dst, InputArray _M0,
 
     Range range(0, dst.rows);
     warpPerspectiveInvoker invoker(src, dst, M, interpolation, borderType, borderValue);
-    parallel_for_(range, invoker);
+    parallel_for_(range, invoker, dst.total()/(double)(1<<16));
 }
 
 

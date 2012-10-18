@@ -329,11 +329,11 @@ void cv::gpu::copyMakeBorder(const GpuMat& src, GpuMat& dst, int top, int bottom
         typedef void (*caller_t)(const PtrStepSzb& src, const PtrStepSzb& dst, int top, int left, int borderType, const Scalar& value, cudaStream_t stream);
         static const caller_t callers[6][4] =
         {
-            {   copyMakeBorder_caller<uchar, 1>  , 0/*copyMakeBorder_caller<uchar, 2>*/ ,    copyMakeBorder_caller<uchar, 3>  ,    copyMakeBorder_caller<uchar, 4>},
+            {   copyMakeBorder_caller<uchar, 1>  ,    copyMakeBorder_caller<uchar, 2>   ,    copyMakeBorder_caller<uchar, 3>  ,    copyMakeBorder_caller<uchar, 4>},
             {0/*copyMakeBorder_caller<schar, 1>*/, 0/*copyMakeBorder_caller<schar, 2>*/ , 0/*copyMakeBorder_caller<schar, 3>*/, 0/*copyMakeBorder_caller<schar, 4>*/},
             {   copyMakeBorder_caller<ushort, 1> , 0/*copyMakeBorder_caller<ushort, 2>*/,    copyMakeBorder_caller<ushort, 3> ,    copyMakeBorder_caller<ushort, 4>},
             {   copyMakeBorder_caller<short, 1>  , 0/*copyMakeBorder_caller<short, 2>*/ ,    copyMakeBorder_caller<short, 3>  ,    copyMakeBorder_caller<short, 4>},
-            {0/*copyMakeBorder_caller<int, 1>*/  , 0/*copyMakeBorder_caller<int, 2>*/   , 0/*copyMakeBorder_caller<int, 3>*/  , 0/*copyMakeBorder_caller<int, 4>*/},
+            {0/*copyMakeBorder_caller<int,   1>*/, 0/*copyMakeBorder_caller<int,   2>*/ , 0/*copyMakeBorder_caller<int,   3>*/, 0/*copyMakeBorder_caller<int  , 4>*/},
             {   copyMakeBorder_caller<float, 1>  , 0/*copyMakeBorder_caller<float, 2>*/ ,    copyMakeBorder_caller<float, 3>  ,    copyMakeBorder_caller<float ,4>}
         };
 
@@ -553,7 +553,7 @@ void cv::gpu::integralBuffered(const GpuMat& src, GpuMat& sum, GpuMat& buffer, S
 
     src.locateROI(whole, offset);
 
-    if (info.supports(WARP_SHUFFLE_FUNCTIONS) )
+    if (info.supports(WARP_SHUFFLE_FUNCTIONS) && src.cols <= 2048)
     {
         GpuMat srcAlligned;
 
@@ -1108,31 +1108,6 @@ namespace
             Scharr(src, Dy, CV_32F, 0, 1, buf, scale, borderType, -1, stream);
         }
     }
-}
-
-bool cv::gpu::tryConvertToGpuBorderType(int cpuBorderType, int& gpuBorderType)
-{
-    switch (cpuBorderType)
-    {
-    case cv::BORDER_REFLECT101:
-        gpuBorderType = cv::gpu::BORDER_REFLECT101_GPU;
-        return true;
-    case cv::BORDER_REPLICATE:
-        gpuBorderType = cv::gpu::BORDER_REPLICATE_GPU;
-        return true;
-    case cv::BORDER_CONSTANT:
-        gpuBorderType = cv::gpu::BORDER_CONSTANT_GPU;
-        return true;
-    case cv::BORDER_REFLECT:
-        gpuBorderType = cv::gpu::BORDER_REFLECT_GPU;
-        return true;
-    case cv::BORDER_WRAP:
-        gpuBorderType = cv::gpu::BORDER_WRAP_GPU;
-        return true;
-    default:
-        return false;
-    };
-    return false;
 }
 
 void cv::gpu::cornerHarris(const GpuMat& src, GpuMat& dst, int blockSize, int ksize, double k, int borderType)

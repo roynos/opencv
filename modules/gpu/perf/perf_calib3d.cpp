@@ -8,32 +8,23 @@ namespace {
 //////////////////////////////////////////////////////////////////////
 // StereoBM
 
-typedef pair<string, string> pair_string;
+typedef std::tr1::tuple<string, string> pair_string;
 DEF_PARAM_TEST_1(ImagePair, pair_string);
 
-static pair_string make_string_pair(const string& a, const string& b)
-{
-#ifdef _MSC_VER    
-    return pair<string, string>(a, b);
-#else
-    return make_pair<string, string>(a, b);
-#endif    
-}
-
-PERF_TEST_P(ImagePair, Calib3D_StereoBM, Values(make_string_pair("gpu/perf/aloe.png", "gpu/perf/aloeR.png")))
+PERF_TEST_P(ImagePair, Calib3D_StereoBM, Values(pair_string("gpu/perf/aloe.png", "gpu/perf/aloeR.png")))
 {
     declare.time(5.0);
 
-    const cv::Mat imgLeft = readImage(GetParam().first, cv::IMREAD_GRAYSCALE);
+    const cv::Mat imgLeft = readImage(GET_PARAM(0), cv::IMREAD_GRAYSCALE);
     ASSERT_FALSE(imgLeft.empty());
 
-    const cv::Mat imgRight = readImage(GetParam().second, cv::IMREAD_GRAYSCALE);
+    const cv::Mat imgRight = readImage(GET_PARAM(1), cv::IMREAD_GRAYSCALE);
     ASSERT_FALSE(imgRight.empty());
 
     const int preset = 0;
     const int ndisp = 256;
 
-    if (runOnGpu)
+    if (PERF_RUN_GPU())
     {
         cv::gpu::StereoBM_GPU d_bm(preset, ndisp);
 
@@ -47,6 +38,8 @@ PERF_TEST_P(ImagePair, Calib3D_StereoBM, Values(make_string_pair("gpu/perf/aloe.
         {
             d_bm(d_imgLeft, d_imgRight, d_dst);
         }
+
+        GPU_SANITY_CHECK(d_dst);
     }
     else
     {
@@ -60,25 +53,27 @@ PERF_TEST_P(ImagePair, Calib3D_StereoBM, Values(make_string_pair("gpu/perf/aloe.
         {
             bm(imgLeft, imgRight, dst);
         }
+
+        CPU_SANITY_CHECK(dst);
     }
 }
 
 //////////////////////////////////////////////////////////////////////
 // StereoBeliefPropagation
 
-PERF_TEST_P(ImagePair, Calib3D_StereoBeliefPropagation, Values(make_string_pair("gpu/stereobp/aloe-L.png", "gpu/stereobp/aloe-R.png")))
+PERF_TEST_P(ImagePair, Calib3D_StereoBeliefPropagation, Values(pair_string("gpu/stereobp/aloe-L.png", "gpu/stereobp/aloe-R.png")))
 {
     declare.time(10.0);
 
-    const cv::Mat imgLeft = readImage(GetParam().first);
+    const cv::Mat imgLeft = readImage(GET_PARAM(0));
     ASSERT_FALSE(imgLeft.empty());
 
-    const cv::Mat imgRight = readImage(GetParam().second);
+    const cv::Mat imgRight = readImage(GET_PARAM(1));
     ASSERT_FALSE(imgRight.empty());
 
     const int ndisp = 64;
 
-    if (runOnGpu)
+    if (PERF_RUN_GPU())
     {
         cv::gpu::StereoBeliefPropagation d_bp(ndisp);
 
@@ -92,29 +87,31 @@ PERF_TEST_P(ImagePair, Calib3D_StereoBeliefPropagation, Values(make_string_pair(
         {
             d_bp(d_imgLeft, d_imgRight, d_dst);
         }
+
+        GPU_SANITY_CHECK(d_dst);
     }
     else
     {
-        FAIL();
+        FAIL() << "No such CPU implementation analogy.";
     }
 }
 
 //////////////////////////////////////////////////////////////////////
 // StereoConstantSpaceBP
 
-PERF_TEST_P(ImagePair, Calib3D_StereoConstantSpaceBP, Values(make_string_pair("gpu/stereobm/aloe-L.png", "gpu/stereobm/aloe-R.png")))
+PERF_TEST_P(ImagePair, Calib3D_StereoConstantSpaceBP, Values(pair_string("gpu/stereobm/aloe-L.png", "gpu/stereobm/aloe-R.png")))
 {
     declare.time(10.0);
 
-    const cv::Mat imgLeft = readImage(GetParam().first, cv::IMREAD_GRAYSCALE);
+    const cv::Mat imgLeft = readImage(GET_PARAM(0), cv::IMREAD_GRAYSCALE);
     ASSERT_FALSE(imgLeft.empty());
 
-    const cv::Mat imgRight = readImage(GetParam().second, cv::IMREAD_GRAYSCALE);
+    const cv::Mat imgRight = readImage(GET_PARAM(1), cv::IMREAD_GRAYSCALE);
     ASSERT_FALSE(imgRight.empty());
 
     const int ndisp = 128;
 
-    if (runOnGpu)
+    if (PERF_RUN_GPU())
     {
         cv::gpu::StereoConstantSpaceBP d_csbp(ndisp);
 
@@ -128,27 +125,29 @@ PERF_TEST_P(ImagePair, Calib3D_StereoConstantSpaceBP, Values(make_string_pair("g
         {
             d_csbp(d_imgLeft, d_imgRight, d_dst);
         }
+
+        GPU_SANITY_CHECK(d_dst);
     }
     else
     {
-        FAIL();
+        FAIL() << "No such CPU implementation analogy.";
     }
 }
 
 //////////////////////////////////////////////////////////////////////
 // DisparityBilateralFilter
 
-PERF_TEST_P(ImagePair, Calib3D_DisparityBilateralFilter, Values(make_string_pair("gpu/stereobm/aloe-L.png", "gpu/stereobm/aloe-disp.png")))
+PERF_TEST_P(ImagePair, Calib3D_DisparityBilateralFilter, Values(pair_string("gpu/stereobm/aloe-L.png", "gpu/stereobm/aloe-disp.png")))
 {
-    const cv::Mat img = readImage(GetParam().first, cv::IMREAD_GRAYSCALE);
+    const cv::Mat img = readImage(GET_PARAM(0), cv::IMREAD_GRAYSCALE);
     ASSERT_FALSE(img.empty());
 
-    const cv::Mat disp = readImage(GetParam().second, cv::IMREAD_GRAYSCALE);
+    const cv::Mat disp = readImage(GET_PARAM(1), cv::IMREAD_GRAYSCALE);
     ASSERT_FALSE(disp.empty());
 
     const int ndisp = 128;
 
-    if (runOnGpu)
+    if (PERF_RUN_GPU())
     {
         cv::gpu::DisparityBilateralFilter d_filter(ndisp);
 
@@ -162,10 +161,12 @@ PERF_TEST_P(ImagePair, Calib3D_DisparityBilateralFilter, Values(make_string_pair
         {
             d_filter(d_disp, d_img, d_dst);
         }
+
+        GPU_SANITY_CHECK(d_dst);
     }
     else
     {
-        FAIL();
+        FAIL() << "No such CPU implementation analogy.";
     }
 }
 
@@ -184,7 +185,7 @@ PERF_TEST_P(Count, Calib3D_TransformPoints, Values(5000, 10000, 20000))
     const cv::Mat rvec = cv::Mat::ones(1, 3, CV_32FC1);
     const cv::Mat tvec = cv::Mat::ones(1, 3, CV_32FC1);
 
-    if (runOnGpu)
+    if (PERF_RUN_GPU())
     {
         cv::gpu::GpuMat d_src(src);
         cv::gpu::GpuMat d_dst;
@@ -195,10 +196,12 @@ PERF_TEST_P(Count, Calib3D_TransformPoints, Values(5000, 10000, 20000))
         {
             cv::gpu::transformPoints(d_src, rvec, tvec, d_dst);
         }
+
+        GPU_SANITY_CHECK(d_dst);
     }
     else
     {
-        FAIL();
+        FAIL() << "No such CPU implementation analogy.";
     }
 }
 
@@ -216,7 +219,7 @@ PERF_TEST_P(Count, Calib3D_ProjectPoints, Values(5000, 10000, 20000))
     const cv::Mat tvec = cv::Mat::ones(1, 3, CV_32FC1);
     const cv::Mat camera_mat = cv::Mat::ones(3, 3, CV_32FC1);
 
-    if (runOnGpu)
+    if (PERF_RUN_GPU())
     {
         cv::gpu::GpuMat d_src(src);
         cv::gpu::GpuMat d_dst;
@@ -227,6 +230,8 @@ PERF_TEST_P(Count, Calib3D_ProjectPoints, Values(5000, 10000, 20000))
         {
             cv::gpu::projectPoints(d_src, rvec, tvec, camera_mat, cv::Mat(), d_dst);
         }
+
+        GPU_SANITY_CHECK(d_dst);
     }
     else
     {
@@ -238,6 +243,8 @@ PERF_TEST_P(Count, Calib3D_ProjectPoints, Values(5000, 10000, 20000))
         {
             cv::projectPoints(src, rvec, tvec, camera_mat, cv::noArray(), dst);
         }
+
+        CPU_SANITY_CHECK(dst);
     }
 }
 
@@ -274,7 +281,7 @@ PERF_TEST_P(Count, Calib3D_SolvePnPRansac, Values(5000, 10000, 20000))
     cv::Mat rvec;
     cv::Mat tvec;
 
-    if (runOnGpu)
+    if (PERF_RUN_GPU())
     {
         cv::gpu::solvePnPRansac(object, image, camera_mat, dist_coef, rvec, tvec);
 
@@ -292,6 +299,9 @@ PERF_TEST_P(Count, Calib3D_SolvePnPRansac, Values(5000, 10000, 20000))
             cv::solvePnPRansac(object, image, camera_mat, dist_coef, rvec, tvec);
         }
     }
+
+    CPU_SANITY_CHECK(rvec);
+    CPU_SANITY_CHECK(tvec);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -308,7 +318,7 @@ PERF_TEST_P(Sz_Depth, Calib3D_ReprojectImageTo3D, Combine(GPU_TYPICAL_MAT_SIZES,
     cv::Mat Q(4, 4, CV_32FC1);
     fillRandom(Q, 0.1, 1.0);
 
-    if (runOnGpu)
+    if (PERF_RUN_GPU())
     {
         cv::gpu::GpuMat d_src(src);
         cv::gpu::GpuMat d_dst;
@@ -319,6 +329,8 @@ PERF_TEST_P(Sz_Depth, Calib3D_ReprojectImageTo3D, Combine(GPU_TYPICAL_MAT_SIZES,
         {
             cv::gpu::reprojectImageTo3D(d_src, d_dst, Q);
         }
+
+        GPU_SANITY_CHECK(d_dst);
     }
     else
     {
@@ -330,6 +342,8 @@ PERF_TEST_P(Sz_Depth, Calib3D_ReprojectImageTo3D, Combine(GPU_TYPICAL_MAT_SIZES,
         {
             cv::reprojectImageTo3D(src, dst, Q);
         }
+
+        CPU_SANITY_CHECK(dst);
     }
 }
 
@@ -344,7 +358,7 @@ PERF_TEST_P(Sz_Depth, Calib3D_DrawColorDisp, Combine(GPU_TYPICAL_MAT_SIZES, Valu
     cv::Mat src(size, type);
     fillRandom(src, 0, 255);
 
-    if (runOnGpu)
+    if (PERF_RUN_GPU())
     {
         cv::gpu::GpuMat d_src(src);
         cv::gpu::GpuMat d_dst;
@@ -355,10 +369,12 @@ PERF_TEST_P(Sz_Depth, Calib3D_DrawColorDisp, Combine(GPU_TYPICAL_MAT_SIZES, Valu
         {
             cv::gpu::drawColorDisp(d_src, d_dst, 255);
         }
+
+        GPU_SANITY_CHECK(d_dst);
     }
     else
     {
-        FAIL();
+        FAIL() << "No such CPU implementation analogy.";
     }
 }
 

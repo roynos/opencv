@@ -575,12 +575,12 @@ CvCapture_OpenNI::CvCapture_OpenNI( int index )
 
     // Chose device according to index
     xn::NodeInfoList::Iterator it = devicesList.Begin();
-		for( int i = 0; i < index && it!=devicesList.End(); ++i ) it++;
-		if ( it == devicesList.End() )
-		{
-			std::cerr << "CvCapture_OpenNI::CvCapture_OpenNI : Failed device with index " << index << std::endl;
-			return;
-		}
+        for( int i = 0; i < index && it!=devicesList.End(); ++i ) it++;
+        if ( it == devicesList.End() )
+        {
+            std::cerr << "CvCapture_OpenNI::CvCapture_OpenNI : Failed device with index " << index << std::endl;
+            return;
+        }
 
     xn::NodeInfo deviceNode = *it;
     status = context.CreateProductionTree( deviceNode, productionNode );
@@ -970,6 +970,12 @@ double CvCapture_OpenNI::getDepthGeneratorProperty( int propIdx )
     case CV_CAP_PROP_OPENNI_REGISTRATION :
         propValue = depthGenerator.GetAlternativeViewPointCap().IsViewPointAs(imageGenerator) ? 1.0 : 0.0;
         break;
+    case CV_CAP_PROP_POS_MSEC :
+        propValue = depthGenerator.GetTimestamp();
+        break;
+    case CV_CAP_PROP_POS_FRAMES :
+        propValue = depthGenerator.GetFrameID();
+        break;
     default :
     {
         std::stringstream ss;
@@ -1060,6 +1066,12 @@ double CvCapture_OpenNI::getImageGeneratorProperty( int propIdx )
         if( imageGenerator.GetMapOutputMode(mode) == XN_STATUS_OK )
             propValue = mode.nFPS;
         break;
+    case CV_CAP_PROP_POS_MSEC :
+        propValue = imageGenerator.GetTimestamp();
+        break;
+    case CV_CAP_PROP_POS_FRAMES :
+        propValue = imageGenerator.GetFrameID();
+        break;
     default :
     {
         std::stringstream ss;
@@ -1100,6 +1112,16 @@ bool CvCapture_OpenNI::setImageGeneratorProperty( int propIdx, double propValue 
             mode.nYRes = XN_SXGA_Y_RES;
             mode.nFPS = 30;
             break;
+        case CV_CAP_OPENNI_QVGA_30HZ :
+             mode.nXRes = XN_QVGA_X_RES;
+             mode.nYRes = XN_QVGA_Y_RES;
+             mode.nFPS = 30;
+             break;
+        case CV_CAP_OPENNI_QVGA_60HZ :
+             mode.nXRes = XN_QVGA_X_RES;
+             mode.nYRes = XN_QVGA_Y_RES;
+             mode.nFPS = 60;
+             break;
         default :
             CV_Error( CV_StsBadArg, "Unsupported image generator output mode.\n");
         }

@@ -1,4 +1,4 @@
-# Will be modified later 
+# Will be modified later
 if(NOT HAVE_OPENCL)
   ocv_module_disable(ocl)
 endif()
@@ -11,11 +11,19 @@ ocv_module_include_directories()
 file(GLOB CL_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/kernels/*.cl")
 set(kernels_cpp "${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp")
 set(cl2cpp_script "${CMAKE_CURRENT_SOURCE_DIR}/cl2cpp.py")
+set(cl2cpp_script_W32 "${CMAKE_CURRENT_SOURCE_DIR}/cl2cpp.js")
 
-add_custom_command(
+IF(WIN32)
+   add_custom_command(
+   OUTPUT ${kernels_cpp}
+   COMMAND wscript.exe ${cl2cpp_script_W32} "${CMAKE_CURRENT_SOURCE_DIR}/src/kernels" ${kernels_cpp}
+   DEPENDS ${CL_FILES} ${cl2cpp_script_W32})
+else()
+   add_custom_command(
    OUTPUT ${kernels_cpp}
    COMMAND ${PYTHON_EXECUTABLE} ${cl2cpp_script} "${CMAKE_CURRENT_SOURCE_DIR}/src/kernels" ${kernels_cpp}
    DEPENDS ${CL_FILES} ${cl2cpp_script})
+ENDIF()
 
 file(GLOB lib_hdrs     "include/opencv2/${name}/*.hpp" "include/opencv2/${name}/*.h")
 file(GLOB lib_srcs     "src/*.cpp")
@@ -30,12 +38,12 @@ if (HAVE_OPENCL)
       ocv_include_directories(${OPENCL_INCLUDE_DIR})
   endif()
   if (HAVE_CLAMDFFT)
-	set(ocl_link_libs ${ocl_link_libs} ${CLAMDFFT_LIBRARIES})
-	ocv_include_directories(${CLAMDFFT_INCLUDE_DIR})
+    set(ocl_link_libs ${ocl_link_libs} ${CLAMDFFT_LIBRARIES})
+    ocv_include_directories(${CLAMDFFT_INCLUDE_DIR})
   endif()
   if (HAVE_CLAMDBLAS)
-	set(ocl_link_libs ${ocl_link_libs} ${CLAMDBLAS_LIBRARIES})
-	ocv_include_directories(${CLAMDBLAS_INCLUDE_DIR})
+    set(ocl_link_libs ${ocl_link_libs} ${CLAMDBLAS_LIBRARIES})
+    ocv_include_directories(${CLAMDBLAS_INCLUDE_DIR})
   endif()
 endif()
 
@@ -43,7 +51,7 @@ ocv_set_module_sources(
     HEADERS ${lib_hdrs}
     SOURCES ${lib_int_hdrs} ${lib_srcs}
     )
-    
+
 set(OPENCV_MODULE_opencv_ocl_SOURCES ${OPENCV_MODULE_opencv_ocl_SOURCES} ${kernels_cpp})
 ocv_create_module(${ocl_link_libs})
 

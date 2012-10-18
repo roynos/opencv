@@ -128,4 +128,13 @@
 
 #endif /* defined(HAVE_CUDA) */
 
+
+namespace cv { namespace gpu
+{
+    // Converts CPU border extrapolation mode into GPU internal analogue.
+    // Returns true if the GPU analogue exists, false otherwise.
+    bool tryConvertToGpuBorderType(int cpuBorderType, int& gpuBorderType);
+
+}}
+
 #endif /* __OPENCV_PRECOMP_H__ */

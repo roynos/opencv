@@ -9,9 +9,9 @@ using std::tr1::get;
 
 enum{HALF_SIZE=0, UPSIDE_DOWN, REFLECTION_X, REFLECTION_BOTH};
 
-CV_ENUM(BorderMode, BORDER_CONSTANT, BORDER_REPLICATE);
-CV_ENUM(InterType, INTER_NEAREST, INTER_LINEAR);
-CV_ENUM(RemapMode, HALF_SIZE, UPSIDE_DOWN, REFLECTION_X, REFLECTION_BOTH);
+CV_ENUM(BorderMode, BORDER_CONSTANT, BORDER_REPLICATE)
+CV_ENUM(InterType, INTER_NEAREST, INTER_LINEAR)
+CV_ENUM(RemapMode, HALF_SIZE, UPSIDE_DOWN, REFLECTION_X, REFLECTION_BOTH)
 
 typedef TestBaseWithParam< tr1::tuple<Size, InterType, BorderMode> > TestWarpAffine;
 typedef TestBaseWithParam< tr1::tuple<Size, InterType, BorderMode> > TestWarpPerspective;
@@ -76,6 +76,48 @@ PERF_TEST_P( TestWarpPerspective, WarpPerspective,
     declare.in(src).out(dst);
 
     TEST_CYCLE() warpPerspective( src, dst, warpMat, sz, interType, borderMode, Scalar::all(150) );
+
+    SANITY_CHECK(dst);
+}
+
+PERF_TEST_P( TestWarpPerspective, WarpPerspectiveLarge,
+             Combine(
+                Values( sz3MP, sz5MP ),
+                ValuesIn( InterType::all() ),
+                ValuesIn( BorderMode::all() )
+             )
+)
+{
+    Size sz;
+    int borderMode, interType;
+    sz         = get<0>(GetParam());
+    borderMode = get<1>(GetParam());
+    interType  = get<2>(GetParam());
+
+    string resolution;
+    if (sz == sz3MP)
+        resolution = "3MP";
+    else if (sz == sz5MP)
+        resolution = "5MP";
+    else
+        FAIL();
+
+    Mat src, img = imread(getDataPath("cv/shared/" + resolution + ".png"));
+    cvtColor(img, src, COLOR_BGR2BGRA, 4);
+
+    int shift = 103;
+    Mat srcVertices = (Mat_<Vec2f>(1, 4) << Vec2f(0, 0), Vec2f(sz.width-1, 0),
+                                            Vec2f(sz.width-1, sz.height-1), Vec2f(0, sz.height-1));
+    Mat dstVertices = (Mat_<Vec2f>(1, 4) << Vec2f(0, shift), Vec2f(sz.width-shift/2, 0),
+                                            Vec2f(sz.width-shift, sz.height-shift), Vec2f(shift/2, sz.height-1));
+    Mat warpMat = getPerspectiveTransform(srcVertices, dstVertices);
+
+    Mat dst(sz, CV_8UC4);
+
+    declare.in(src).out(dst);
+
+    TEST_CYCLE()
+        warpPerspective( src, dst, warpMat, sz, interType, borderMode, Scalar::all(150) );
 
     SANITY_CHECK(dst);
 }
@@ -164,5 +206,7 @@ PERF_TEST(Transform, getPerspectiveTransform)
     {
         transformCoefficient = getPerspectiveTransform(source, destination);
     }
+
+    SANITY_CHECK(transformCoefficient, 1e-5);
 }
 

@@ -4,7 +4,7 @@ Reading and Writing Images and Video
 .. highlight:: cpp
 
 imdecode
-------------
+--------
 Reads an image from a buffer in memory.
 
 .. ocv:function:: Mat imdecode( InputArray buf,  int flags )
@@ -20,7 +20,7 @@ Reads an image from a buffer in memory.
     :param buf: Input array or vector of bytes.
 
     :param flags: The same flags as in :ocv:func:`imread` .
-    
+
     :param dst: The optional output placeholder for the decoded matrix. It can save the image reallocations when the function is called repeatedly for images of the same size.
 
 The function reads an image from the specified buffer in the memory.
@@ -32,7 +32,7 @@ See
 .. note:: In the case of color images, the decoded images will have the channels stored in ``B G R`` order.
 
 imencode
-------------
+--------
 Encodes an image into a memory buffer.
 
 .. ocv:function:: bool imencode( const string& ext, InputArray img, vector<uchar>& buf, const vector<int>& params=vector<int>())
@@ -56,7 +56,7 @@ See
 .. note:: ``cvEncodeImage`` returns single-row matrix of type ``CV_8UC1`` that contains encoded image as array of bytes.
 
 imread
-----------
+------
 Loads an image from a file.
 
 .. ocv:function:: Mat imread( const string& filename, int flags=1 )
@@ -74,18 +74,19 @@ Loads an image from a file.
     :param filename: Name of file to be loaded.
 
     :param flags: Flags specifying the color type of a loaded image:
-    
-        * 1 - 
-        * CV_LOAD_IMAGE_ANYDEPTH - 
+
+        * 1 -
+        * CV_LOAD_IMAGE_ANYDEPTH -
         CV_LOAD_IMAGE_COLOR
         CV_LOAD_IMAGE_GRAYSCALE
-        
 
-        * **>0**  Return a 3-channel color image
 
-        * **=0**  Return a grayscale image
+        * **>0**  Return a 3-channel color image.
+            .. note:: In the current implementation the alpha channel, if any, is stripped from the output image. Use negative value if you need the alpha channel.
 
-        * **<0**  Return the loaded image as is. Note that in the current implementation the alpha channel, if any, is stripped from the output image. For example, a 4-channel RGBA image is loaded as RGB if  :math:`flags\ge0` .
+        * **=0**  Return a grayscale image.
+
+        * **<0**  Return the loaded image as is (with alpha channel).
 
 The function ``imread`` loads an image from the specified file and returns it. If the image cannot be read (because of missing file, improper permissions, unsupported or invalid format), the function returns an empty matrix ( ``Mat::data==NULL`` ). Currently, the following file formats are supported:
 

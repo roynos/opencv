@@ -13,7 +13,7 @@ void onManagerConnected()
 .. method:: void onManagerConnected(int status)
 
     Callback method that is called after OpenCV Library initialization.
- 
+
     :param status: status of initialization (see Initialization Status Constants).
 
 void onPackageInstall()
@@ -30,11 +30,7 @@ Initialization status constants
 
 .. data:: SUCCESS
 
-    OpenCV initialization finished successfully.
-
-.. data:: RESTART_REQUIRED
-
-    OpenCV library installation via Google Play service was initialized. Application restart is required
+    OpenCV initialization finished successfully
 
 .. data:: MARKET_ERROR
 

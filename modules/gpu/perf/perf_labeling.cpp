@@ -32,8 +32,8 @@ struct GreedyLabeling
             return lo <= d && d <= hi;
         }
 
-	private:
-		InInterval& operator=(const InInterval&);
+    private:
+        InInterval& operator=(const InInterval&);
 
 
     };
@@ -106,7 +106,7 @@ PERF_TEST_P(Image, Labeling_ConnectedComponents, Values<string>("gpu/labeling/al
 
     cv::Mat image = readImage(GetParam(), cv::IMREAD_GRAYSCALE);
 
-    if (runOnGpu)
+    if (PERF_RUN_GPU())
     {
         cv::gpu::GpuMat mask;
         mask.create(image.rows, image.cols, CV_8UC1);
@@ -122,6 +122,8 @@ PERF_TEST_P(Image, Labeling_ConnectedComponents, Values<string>("gpu/labeling/al
         {
             cv::gpu::labelComponents(mask, components);
         }
+
+        GPU_SANITY_CHECK(components);
     }
     else
     {
@@ -135,6 +137,8 @@ PERF_TEST_P(Image, Labeling_ConnectedComponents, Values<string>("gpu/labeling/al
         {
             host(host._labels);
         }
+
+        CPU_SANITY_CHECK(host._labels);
     }
 }
 

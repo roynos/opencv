@@ -171,6 +171,14 @@ if(HAVE_PVAPI)
   list(APPEND HIGHGUI_LIBRARIES ${PVAPI_LIBRARY})
 endif()
 
+if(HAVE_GIGE_API)
+  add_definitions(-DHAVE_GIGE_API)
+  ocv_include_directories(${GIGEAPI_INCLUDE_PATH})
+  set(highgui_srcs src/cap_giganetix.cpp ${highgui_srcs})
+  list(APPEND HIGHGUI_LIBRARIES ${GIGEAPI_LIBRARIES})
+  list(APPEND highgui_srcs src/cap_giganetix.cpp)
+endif(HAVE_GIGE_API)
+
 if(WITH_IMAGEIO)
   add_definitions(-DHAVE_IMAGEIO=1)
   if(IOS)
@@ -220,7 +228,6 @@ source_group("Include" FILES ${highgui_ext_hdrs})
 ocv_set_module_sources(HEADERS ${highgui_ext_hdrs} SOURCES ${highgui_srcs} ${highgui_hdrs} ${grfmt_srcs} ${grfmt_hdrs})
 ocv_module_include_directories()
 
-ocv_list_unique(HIGHGUI_LIBRARIES)
 ocv_create_module(${GRFMT_LIBS} ${HIGHGUI_LIBRARIES})
 
 if(BUILD_SHARED_LIBS)
