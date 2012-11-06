@@ -47,7 +47,7 @@
 #define __OPENCV_PRECOMP_H__
 
 #if _MSC_VER >= 1200
-#pragma warning( disable: 4244 4251 4710 4711 4514 4996 )
+#pragma warning( disable: 4267 4324 4244 4251 4710 4711 4514 4996 )
 #endif
 
 #ifdef HAVE_CVCONFIG_H
@@ -63,16 +63,14 @@
 #include <exception>
 #include <stdio.h>
 
-#include "opencv2/ocl/ocl.hpp"
-
-#include "opencv2/imgproc/imgproc.hpp"
-
-#include "opencv2/objdetect/objdetect.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/imgproc/imgproc_c.h"
 #include "opencv2/core/core_c.h"
-//#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/objdetect/objdetect.hpp"
+#include "opencv2/ocl/ocl.hpp"
+
 #include "opencv2/core/internal.hpp"
+//#include "opencv2/highgui/highgui.hpp"
 
 #define __ATI__
 

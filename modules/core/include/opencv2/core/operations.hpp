@@ -56,7 +56,13 @@
   #define CV_XADD(addr,delta) _InterlockedExchangeAdd(const_cast<void*>(reinterpret_cast<volatile void*>(addr)), delta)
 #elif defined __GNUC__
 
-  #if __GNUC__*10 + __GNUC_MINOR__ >= 42
+  #if defined __clang__ && __clang_major__ >= 3
+    #ifdef __ATOMIC_SEQ_CST
+        #define CV_XADD(addr, delta) __c11_atomic_fetch_add((_Atomic(int)*)(addr), (delta), __ATOMIC_SEQ_CST)
+    #else
+        #define CV_XADD(addr, delta) __atomic_fetch_add((_Atomic(int)*)(addr), (delta), 5)
+    #endif
+  #elif __GNUC__*10 + __GNUC_MINOR__ >= 42
 
     #if !defined WIN32 && (defined __i486__ || defined __i586__ || \
         defined __i686__ || defined __MMX__ || defined __SSE__  || defined __ppc__)
@@ -85,6 +91,11 @@
 #endif
 
 #include <limits>
+
+#ifdef _MSC_VER
+# pragma warning(push)
+# pragma warning(disable:4127) //conditional expression is constant
+#endif
 
 namespace cv
 {
@@ -2455,18 +2466,10 @@ dot(const Vector<_Tp>& v1, const Vector<_Tp>& v2)
     assert(v1.size() == v2.size());
 
     _Tw s = 0;
-    if( n > 0 )
-    {
-        const _Tp *ptr1 = &v1[0], *ptr2 = &v2[0];
-     #if CV_ENABLE_UNROLLED
-        const size_t n2 = (n > 4) ? n : 4;
-        for(; i <= n2 - 4; i += 4 )
-            s += (_Tw)ptr1[i]*ptr2[i] + (_Tw)ptr1[i+1]*ptr2[i+1] +
-                (_Tw)ptr1[i+2]*ptr2[i+2] + (_Tw)ptr1[i+3]*ptr2[i+3];
-    #endif
-        for( ; i < n; i++ )
-            s += (_Tw)ptr1[i]*ptr2[i];
-    }
+    const _Tp *ptr1 = &v1[0], *ptr2 = &v2[0];
+    for( ; i < n; i++ )
+        s += (_Tw)ptr1[i]*ptr2[i];
+
     return s;
 }
 
@@ -3916,6 +3919,22 @@ inline void Algorithm::set(const string& _name, const Ptr<_Tp>& value)
     this->set<_Tp>(_name.c_str(), value);
 }
 
+template<typename _Tp>
+inline void Algorithm::setAlgorithm(const char* _name, const Ptr<_Tp>& value)
+{
+    Ptr<Algorithm> algo_ptr = value. template ptr<cv::Algorithm>();
+    if (algo_ptr.empty()) {
+        CV_Error( CV_StsUnsupportedFormat, "unknown/unsupported Ptr type of the second parameter of the method Algorithm::set");
+    }
+    info()->set(this, _name, ParamType<Algorithm>::type, &algo_ptr);
+}
+
+template<typename _Tp>
+inline void Algorithm::setAlgorithm(const string& _name, const Ptr<_Tp>& value)
+{
+    this->set<_Tp>(_name.c_str(), value);
+}
+
 template<typename _Tp> inline typename ParamType<_Tp>::member_type Algorithm::get(const string& _name) const
 {
     typename ParamType<_Tp>::member_type value;
@@ -3949,6 +3968,10 @@ template<typename _Tp> inline void AlgorithmInfo::addParam(Algorithm& algo, cons
 }
 
 }
+
+#ifdef _MSC_VER
+# pragma warning(pop)
+#endif
 
 #endif // __cplusplus
 #endif

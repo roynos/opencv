@@ -338,7 +338,8 @@ namespace cv
                                            EXT_LEN, (void *)extends_set, &extends_size));
             CV_Assert(extends_size < EXT_LEN);
             extends_set[EXT_LEN - 1] = 0;
-            //oclinfo.extra_options = NULL;
+            memset(oclinfo.impl->extra_options, 0, 512);
+            oclinfo.impl->double_support = 0;
             int fp64_khr = string(extends_set).find("cl_khr_fp64");
 
             if(fp64_khr >= 0 && fp64_khr < EXT_LEN)
@@ -644,7 +645,7 @@ namespace cv
             size_t kernelWorkGroupSize;
             openCLSafeCall(clGetKernelWorkGroupInfo(kernel, clCxt->impl->devices[0],
                                                     CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &kernelWorkGroupSize, 0));
-            CV_DbgAssert( (localThreads[0] <= clCxt->impl->maxWorkItemSizes[0]) &&
+            CV_Assert( (localThreads[0] <= clCxt->impl->maxWorkItemSizes[0]) &&
                           (localThreads[1] <= clCxt->impl->maxWorkItemSizes[1]) &&
                           (localThreads[2] <= clCxt->impl->maxWorkItemSizes[2]) &&
                           ((localThreads[0] * localThreads[1] * localThreads[2]) <= kernelWorkGroupSize) &&

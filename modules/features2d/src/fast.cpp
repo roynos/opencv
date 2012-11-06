@@ -44,6 +44,10 @@ The references are:
 #include "precomp.hpp"
 #include "fast_score.hpp"
 
+#if defined _MSC_VER
+# pragma warning( disable : 4127)
+#endif
+
 namespace cv
 {
 
@@ -255,6 +259,10 @@ void FAST(InputArray _img, std::vector<KeyPoint>& keypoints, int threshold, bool
       FAST_t<12>(_img, keypoints, threshold, nonmax_suppression);
       break;
     case FastFeatureDetector::TYPE_9_16:
+#ifdef HAVE_TEGRA_OPTIMIZATION
+      if(tegra::FAST(_img, keypoints, threshold, nonmax_suppression))
+        break;
+#endif
       FAST_t<16>(_img, keypoints, threshold, nonmax_suppression);
       break;
   }
