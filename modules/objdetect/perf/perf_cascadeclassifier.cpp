@@ -14,11 +14,7 @@ PERF_TEST_P(ImageName_MinSize, CascadeClassifierLBPFrontalFace,
             testing::Combine(testing::Values( std::string("cv/shared/lena.png"),
                                               std::string("cv/shared/1_itseez-0000289.png"),
                                               std::string("cv/shared/1_itseez-0000492.png"),
-                                              std::string("cv/shared/1_itseez-0000573.png"),
-                                              std::string("cv/shared/1_itseez-0000892.png"),
-                                              std::string("cv/shared/1_itseez-0001238.png"),
-                                              std::string("cv/shared/1_itseez-0001438.png"),
-                                              std::string("cv/shared/1_itseez-0002524.png")),
+                                              std::string("cv/shared/1_itseez-0000573.png")),
                              testing::Values(24, 30, 40, 50, 60, 70, 80, 90)
                              )
             )
@@ -58,19 +54,20 @@ typedef perf::TestBaseWithParam<fixture> detect;
 
 
 namespace {
-  typedef cv::SCascade::Detection detection_t;
+typedef cv::SCascade::Detection detection_t;
 
-  void extractRacts(std::vector<detection_t> objectBoxes, vector<Rect> rects)
-  {
+void extractRacts(std::vector<detection_t> objectBoxes, vector<Rect>& rects)
+{
     rects.clear();
     for (int i = 0; i < (int)objectBoxes.size(); ++i)
-      rects.push_back(objectBoxes[i].bb);
-  }
+        rects.push_back(objectBoxes[i].bb);
+}
+
 }
 
 PERF_TEST_P(detect, SCascade,
-    testing::Combine(testing::Values(std::string("cv/cascadeandhog/sc_cvpr_2012_to_opencv.xml")),
-    testing::Values(std::string("cv/cascadeandhog/bahnhof/image_00000000_0.png"))))
+    testing::Combine(testing::Values(std::string("cv/cascadeandhog/cascades/inria_caltech-17.01.2013.xml")),
+    testing::Values(std::string("cv/cascadeandhog/images/image_00000000_0.png"))))
 {
     typedef cv::SCascade::Detection Detection;
     cv::Mat colored = imread(getDataPath(get<1>(GetParam())));

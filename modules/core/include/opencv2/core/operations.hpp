@@ -56,7 +56,7 @@
   #define CV_XADD(addr,delta) _InterlockedExchangeAdd(const_cast<void*>(reinterpret_cast<volatile void*>(addr)), delta)
 #elif defined __GNUC__
 
-  #if defined __clang__ && __clang_major__ >= 3
+  #if defined __clang__ && __clang_major__ >= 3 && !defined __ANDROID__
     #ifdef __ATOMIC_SEQ_CST
         #define CV_XADD(addr, delta) __c11_atomic_fetch_add((_Atomic(int)*)(addr), (delta), __ATOMIC_SEQ_CST)
     #else
@@ -64,8 +64,9 @@
     #endif
   #elif __GNUC__*10 + __GNUC_MINOR__ >= 42
 
-    #if !defined WIN32 && (defined __i486__ || defined __i586__ || \
-        defined __i686__ || defined __MMX__ || defined __SSE__  || defined __ppc__)
+    #if !(defined WIN32 || defined _WIN32) && (defined __i486__ || defined __i586__ || \
+        defined __i686__ || defined __MMX__ || defined __SSE__  || defined __ppc__) || \
+        (defined __GNUC__ && defined _STLPORT_MAJOR)
       #define CV_XADD __sync_fetch_and_add
     #else
       #include <ext/atomicity.h>
@@ -2689,6 +2690,12 @@ template<typename _Tp> template<typename _Tp2> inline const Ptr<_Tp2> Ptr<_Tp>::
     p.refcount = refcount;
     return p;
 }
+
+template<class _Tp, class _Tp2> inline bool operator==(const Ptr<_Tp>& a, const Ptr<_Tp2>& b) { return a.refcount == b.refcount; }
+template<class _Tp, class _Tp2> inline bool operator!=(const Ptr<_Tp>& a, const Ptr<_Tp2>& b) { return a.refcount != b.refcount; }
+
+
+
 
 //// specializied implementations of Ptr::delete_obj() for classic OpenCV types
 

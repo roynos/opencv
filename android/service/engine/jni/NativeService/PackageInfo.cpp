@@ -197,6 +197,7 @@ InstallPath("")
     #ifndef __SUPPORT_TEGRA3
     Platform = PLATFORM_UNKNOWN;
     #endif
+
     FullName = BasePackageName + "_v" + Version.substr(0, Version.size()-1);
     if (PLATFORM_UNKNOWN != Platform)
     {
@@ -341,8 +342,8 @@ InstallPath(install_path)
         LOGD("Trying to load info library \"%s\"", tmp.c_str());
 
             void* handle;
-            const char* (*name_func)();
-            const char* (*revision_func)();
+            InfoFunctionType name_func;
+            InfoFunctionType revision_func;
 
             handle = dlopen(tmp.c_str(), RTLD_LAZY);
             if (handle)
@@ -350,8 +351,8 @@ InstallPath(install_path)
                 const char* error;
 
                 dlerror();
-                *(void **) (&name_func) = dlsym(handle, "GetPackageName");
-                *(void **) (&revision_func) = dlsym(handle, "GetRevision");
+                name_func = (InfoFunctionType)dlsym(handle, "GetPackageName");
+                revision_func = (InfoFunctionType)dlsym(handle, "GetRevision");
                 error = dlerror();
 
                 if (!error && revision_func && name_func)
@@ -392,7 +393,17 @@ InstallPath(install_path)
         Platform = SplitPlatfrom(features);
         if (PLATFORM_UNKNOWN != Platform)
         {
-            CpuID = 0;
+            switch (Platform)
+            {
+                case PLATFORM_TEGRA2:
+                {
+                    CpuID = ARCH_ARMv7 | FEATURES_HAS_VFPv3d16;
+                } break;
+                case PLATFORM_TEGRA3:
+                {
+                    CpuID = ARCH_ARMv7 | FEATURES_HAS_VFPv3 | FEATURES_HAS_NEON;
+                } break;
+            }
         }
         else
         {

@@ -534,12 +534,14 @@ public:
         int shrinkage;
     };
 
+    enum { NO_REJECT = 1, DOLLAR = 2, /*PASCAL = 4,*/ DEFAULT = NO_REJECT};
+
     // An empty cascade will be created.
     // Param minScale is a minimum scale relative to the original size of the image on which cascade will be applyed.
     // Param minScale is a maximum scale relative to the original size of the image on which cascade will be applyed.
     // Param scales is a number of scales from minScale to maxScale.
-    // Param rejfactor is used for NMS.
-    CV_WRAP SCascade(const double minScale = 0.4, const double maxScale = 5., const int scales = 55, const int rejfactor = 1);
+    // Param rejCriteria is used for NMS.
+    CV_WRAP SCascade(const double minScale = 0.4, const double maxScale = 5., const int scales = 55, const int rejCriteria = 1);
 
     CV_WRAP virtual ~SCascade();
 
@@ -559,7 +561,7 @@ public:
     virtual void detect(InputArray image, InputArray rois, std::vector<Detection>& objects) const;
     // Param rects is an output array of bounding rectangles for detected objects.
     // Param confs is an output array of confidence for detected objects. i-th bounding rectangle corresponds i-th configence.
-    CV_WRAP virtual void detect(InputArray image, InputArray rois, OutputArray rects, OutputArray confs) const;
+    CV_WRAP virtual void detect(InputArray image, InputArray rois, CV_OUT OutputArray rects, CV_OUT OutputArray confs) const;
 
 private:
     void detectNoRoi(const Mat& image, std::vector<Detection>& objects) const;
@@ -571,7 +573,7 @@ private:
     double maxScale;
 
     int   scales;
-    int   rejfactor;
+    int   rejCriteria;
 };
 
 CV_EXPORTS bool initModule_objdetect(void);

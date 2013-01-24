@@ -244,6 +244,7 @@ PERF_TEST_P(Size_CvtMode, cvtColor8u,
     Mat src(sz, CV_8UC(ch.scn));
     Mat dst(sz, CV_8UC(ch.dcn));
 
+    declare.time(100);
     declare.in(src, WARMUP_RNG).out(dst);
 
     TEST_CYCLE() cvtColor(src, dst, mode, ch.dcn);
@@ -268,9 +269,35 @@ PERF_TEST_P(Size_CvtMode2, cvtColorYUV420,
     Mat src(sz.height + sz.height / 2, sz.width, CV_8UC(ch.scn));
     Mat dst(sz, CV_8UC(ch.dcn));
 
+    declare.time(100);
     declare.in(src, WARMUP_RNG).out(dst);
 
     TEST_CYCLE() cvtColor(src, dst, mode, ch.dcn);
+
+    SANITY_CHECK(dst, 1);
+}
+
+CV_ENUM(EdgeAwareBayerMode, COLOR_BayerBG2BGR_EA, COLOR_BayerGB2BGR_EA, COLOR_BayerRG2BGR_EA, COLOR_BayerGR2BGR_EA)
+
+typedef std::tr1::tuple<Size, EdgeAwareBayerMode> EdgeAwareParams;
+typedef perf::TestBaseWithParam<EdgeAwareParams> EdgeAwareDemosaicingTest;
+
+PERF_TEST_P(EdgeAwareDemosaicingTest, demosaicingEA,
+            testing::Combine(
+                testing::Values(szVGA, sz720p, sz1080p, Size(130, 60)),
+                testing::ValuesIn(EdgeAwareBayerMode::all())
+                )
+            )
+{
+    Size sz = get<0>(GetParam());
+    int mode = get<1>(GetParam());
+
+    Mat src(sz, CV_8UC1);
+    Mat dst(sz, CV_8UC3);
+
+    declare.in(src, WARMUP_RNG).out(dst);
+
+    TEST_CYCLE() cvtColor(src, dst, mode, 3);
 
     SANITY_CHECK(dst, 1);
 }

@@ -46,7 +46,7 @@
 
 #include <string>
 
-
+#if defined (LOG_CASCADE_STATISTIC)
 struct Logger
 {
     enum { STADIES_NUM = 20 };
@@ -109,7 +109,7 @@ struct Logger
     }
 
 } logger;
-
+#endif
 
 namespace cv
 {
@@ -992,9 +992,9 @@ public:
                     {
                         mtx->lock();
                         rectangles->push_back(Rect(cvRound(x*scalingFactor), cvRound(y*scalingFactor), winSize.width, winSize.height));
-                        mtx->unlock();
                         rejectLevels->push_back(-result);
                         levelWeights->push_back(gypWeight);
+                        mtx->unlock();
                     }
                 }
                 else if( result > 0 )
