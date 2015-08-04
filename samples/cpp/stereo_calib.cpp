@@ -14,18 +14,16 @@
      Or: http://oreilly.com/catalog/9780596516130/
      ISBN-10: 0596516134 or: ISBN-13: 978-0596516130
 
-   OTHER OPENCV SITES:
-   * The source code is on sourceforge at:
-     http://sourceforge.net/projects/opencvlibrary/
-   * The OpenCV wiki page (As of Oct 1, 2008 this is down for changing over servers, but should come back):
-     http://opencvlibrary.sourceforge.net/
-   * An active user group is at:
-     http://tech.groups.yahoo.com/group/OpenCV/
-   * The minutes of weekly OpenCV development meetings are at:
-     http://pr.willowgarage.com/wiki/OpenCV
+   OPENCV WEBSITES:
+     Homepage:      http://opencv.org
+     Online docs:   http://docs.opencv.org
+     Q&A forum:     http://answers.opencv.org
+     Issue tracker: http://code.opencv.org
+     GitHub:        https://github.com/Itseez/opencv/
    ************************************************** */
 
 #include "opencv2/calib3d/calib3d.hpp"
+#include "opencv2/imgcodecs.hpp"
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 
@@ -106,7 +104,7 @@ StereoCalib(const vector<string>& imagelist, Size boardSize, bool useCalibrated=
                 else
                     resize(img, timg, Size(), scale, scale);
                 found = findChessboardCorners(timg, boardSize, corners,
-                    CV_CALIB_CB_ADAPTIVE_THRESH | CV_CALIB_CB_NORMALIZE_IMAGE);
+                    CALIB_CB_ADAPTIVE_THRESH | CALIB_CB_NORMALIZE_IMAGE);
                 if( found )
                 {
                     if( scale > 1 )
@@ -121,7 +119,7 @@ StereoCalib(const vector<string>& imagelist, Size boardSize, bool useCalibrated=
             {
                 cout << filename << endl;
                 Mat cimg, cimg1;
-                cvtColor(img, cimg, CV_GRAY2BGR);
+                cvtColor(img, cimg, COLOR_GRAY2BGR);
                 drawChessboardCorners(cimg, boardSize, corners, found);
                 double sf = 640./MAX(img.rows, img.cols);
                 resize(cimg, cimg1, Size(), sf, sf);
@@ -135,7 +133,7 @@ StereoCalib(const vector<string>& imagelist, Size boardSize, bool useCalibrated=
             if( !found )
                 break;
             cornerSubPix(img, corners, Size(11,11), Size(-1,-1),
-                         TermCriteria(CV_TERMCRIT_ITER+CV_TERMCRIT_EPS,
+                         TermCriteria(TermCriteria::COUNT+TermCriteria::EPS,
                                       30, 0.01));
         }
         if( k == 2 )
@@ -161,7 +159,7 @@ StereoCalib(const vector<string>& imagelist, Size boardSize, bool useCalibrated=
     {
         for( j = 0; j < boardSize.height; j++ )
             for( k = 0; k < boardSize.width; k++ )
-                objectPoints[i].push_back(Point3f(j*squareSize, k*squareSize, 0));
+                objectPoints[i].push_back(Point3f(k*squareSize, j*squareSize, 0));
     }
 
     cout << "Running stereo calibration ...\n";
@@ -175,12 +173,12 @@ StereoCalib(const vector<string>& imagelist, Size boardSize, bool useCalibrated=
                     cameraMatrix[0], distCoeffs[0],
                     cameraMatrix[1], distCoeffs[1],
                     imageSize, R, T, E, F,
-                    TermCriteria(CV_TERMCRIT_ITER+CV_TERMCRIT_EPS, 100, 1e-5),
-                    CV_CALIB_FIX_ASPECT_RATIO +
-                    CV_CALIB_ZERO_TANGENT_DIST +
-                    CV_CALIB_SAME_FOCAL_LENGTH +
-                    CV_CALIB_RATIONAL_MODEL +
-                    CV_CALIB_FIX_K3 + CV_CALIB_FIX_K4 + CV_CALIB_FIX_K5);
+                    CALIB_FIX_ASPECT_RATIO +
+                    CALIB_ZERO_TANGENT_DIST +
+                    CALIB_SAME_FOCAL_LENGTH +
+                    CALIB_RATIONAL_MODEL +
+                    CALIB_FIX_K3 + CALIB_FIX_K4 + CALIB_FIX_K5,
+                    TermCriteria(TermCriteria::COUNT+TermCriteria::EPS, 100, 1e-5) );
     cout << "done with RMS error=" << rms << endl;
 
 // CALIBRATION QUALITY CHECK
@@ -214,7 +212,7 @@ StereoCalib(const vector<string>& imagelist, Size boardSize, bool useCalibrated=
     cout << "average reprojection err = " <<  err/npoints << endl;
 
     // save intrinsic parameters
-    FileStorage fs("intrinsics.yml", CV_STORAGE_WRITE);
+    FileStorage fs("../data/intrinsics.yml", FileStorage::WRITE);
     if( fs.isOpened() )
     {
         fs << "M1" << cameraMatrix[0] << "D1" << distCoeffs[0] <<
@@ -232,14 +230,14 @@ StereoCalib(const vector<string>& imagelist, Size boardSize, bool useCalibrated=
                   imageSize, R, T, R1, R2, P1, P2, Q,
                   CALIB_ZERO_DISPARITY, 1, imageSize, &validRoi[0], &validRoi[1]);
 
-    fs.open("extrinsics.yml", CV_STORAGE_WRITE);
+    fs.open("extrinsics.yml", FileStorage::WRITE);
     if( fs.isOpened() )
     {
         fs << "R" << R << "T" << T << "R1" << R1 << "R2" << R2 << "P1" << P1 << "P2" << P2 << "Q" << Q;
         fs.release();
     }
     else
-        cout << "Error: can not save the intrinsic parameters\n";
+        cout << "Error: can not save the extrinsic parameters\n";
 
     // OpenCV can handle left-right
     // or up-down camera arrangements
@@ -304,10 +302,10 @@ StereoCalib(const vector<string>& imagelist, Size boardSize, bool useCalibrated=
         for( k = 0; k < 2; k++ )
         {
             Mat img = imread(goodImageList[i*2+k], 0), rimg, cimg;
-            remap(img, rimg, rmap[k][0], rmap[k][1], CV_INTER_LINEAR);
-            cvtColor(rimg, cimg, CV_GRAY2BGR);
+            remap(img, rimg, rmap[k][0], rmap[k][1], INTER_LINEAR);
+            cvtColor(rimg, cimg, COLOR_GRAY2BGR);
             Mat canvasPart = !isVerticalStereo ? canvas(Rect(w*k, 0, w, h)) : canvas(Rect(0, h*k, w, h));
-            resize(cimg, canvasPart, canvasPart.size(), 0, 0, CV_INTER_AREA);
+            resize(cimg, canvasPart, canvasPart.size(), 0, 0, INTER_AREA);
             if( useCalibrated )
             {
                 Rect vroi(cvRound(validRoi[k].x*sf), cvRound(validRoi[k].y*sf),
@@ -384,7 +382,7 @@ int main(int argc, char** argv)
 
     if( imagelistfn == "" )
     {
-        imagelistfn = "stereo_calib.xml";
+        imagelistfn = "../data/stereo_calib.xml";
         boardSize = Size(9, 6);
     }
     else if( boardSize.width <= 0 || boardSize.height <= 0 )
@@ -404,4 +402,3 @@ int main(int argc, char** argv)
     StereoCalib(imagelist, boardSize, true, showRectified);
     return 0;
 }
-

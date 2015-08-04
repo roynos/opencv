@@ -1,3 +1,4 @@
+#include "opencv2/imgcodecs.hpp"
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 
@@ -10,12 +11,12 @@ static void help()
 {
     cout << "\nThis program demonstrates line finding with the Hough transform.\n"
             "Usage:\n"
-            "./houghlines <image_name>, Default is pic1.png\n" << endl;
+            "./houghlines <image_name>, Default is ../data/pic1.png\n" << endl;
 }
 
 int main(int argc, char** argv)
 {
-    const char* filename = argc >= 2 ? argv[1] : "pic1.png";
+    const char* filename = argc >= 2 ? argv[1] : "../data/pic1.png";
 
     Mat src = imread(filename, 0);
     if(src.empty())
@@ -27,7 +28,7 @@ int main(int argc, char** argv)
 
     Mat dst, cdst;
     Canny(src, dst, 50, 200, 3);
-    cvtColor(dst, cdst, CV_GRAY2BGR);
+    cvtColor(dst, cdst, COLOR_GRAY2BGR);
 
 #if 0
     vector<Vec2f> lines;
@@ -51,7 +52,7 @@ int main(int argc, char** argv)
     for( size_t i = 0; i < lines.size(); i++ )
     {
         Vec4i l = lines[i];
-        line( cdst, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(0,0,255), 3, CV_AA);
+        line( cdst, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(0,0,255), 3, LINE_AA);
     }
 #endif
     imshow("source", src);
@@ -61,4 +62,3 @@ int main(int argc, char** argv)
 
     return 0;
 }
-

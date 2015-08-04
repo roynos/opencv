@@ -43,17 +43,20 @@
 #ifndef __OPENCV_VIDEOSTAB_OPTICAL_FLOW_HPP__
 #define __OPENCV_VIDEOSTAB_OPTICAL_FLOW_HPP__
 
-#include "opencv2/core/core.hpp"
+#include "opencv2/core.hpp"
 #include "opencv2/opencv_modules.hpp"
 
-#ifdef HAVE_OPENCV_GPU
-  #include "opencv2/gpu/gpu.hpp"
+#ifdef HAVE_OPENCV_CUDAOPTFLOW
+  #include "opencv2/cudaoptflow.hpp"
 #endif
 
 namespace cv
 {
 namespace videostab
 {
+
+//! @addtogroup videostab
+//! @{
 
 class CV_EXPORTS ISparseOptFlowEstimator
 {
@@ -99,7 +102,8 @@ public:
             OutputArray status, OutputArray errors);
 };
 
-#ifdef HAVE_OPENCV_GPU
+#ifdef HAVE_OPENCV_CUDAOPTFLOW
+
 class CV_EXPORTS SparsePyrLkOptFlowEstimatorGpu
         : public PyrLkOptFlowEstimatorBase, public ISparseOptFlowEstimator
 {
@@ -110,15 +114,15 @@ public:
             InputArray frame0, InputArray frame1, InputArray points0, InputOutputArray points1,
             OutputArray status, OutputArray errors);
 
-    void run(const gpu::GpuMat &frame0, const gpu::GpuMat &frame1, const gpu::GpuMat &points0, gpu::GpuMat &points1,
-             gpu::GpuMat &status, gpu::GpuMat &errors);
+    void run(const cuda::GpuMat &frame0, const cuda::GpuMat &frame1, const cuda::GpuMat &points0, cuda::GpuMat &points1,
+             cuda::GpuMat &status, cuda::GpuMat &errors);
 
-    void run(const gpu::GpuMat &frame0, const gpu::GpuMat &frame1, const gpu::GpuMat &points0, gpu::GpuMat &points1,
-             gpu::GpuMat &status);
+    void run(const cuda::GpuMat &frame0, const cuda::GpuMat &frame1, const cuda::GpuMat &points0, cuda::GpuMat &points1,
+             cuda::GpuMat &status);
 
 private:
-    gpu::PyrLKOpticalFlow optFlowEstimator_;
-    gpu::GpuMat frame0_, frame1_, points0_, points1_, status_, errors_;
+    Ptr<cuda::SparsePyrLKOpticalFlow> optFlowEstimator_;
+    cuda::GpuMat frame0_, frame1_, points0_, points1_, status_, errors_;
 };
 
 class CV_EXPORTS DensePyrLkOptFlowEstimatorGpu
@@ -132,10 +136,13 @@ public:
             OutputArray errors);
 
 private:
-    gpu::PyrLKOpticalFlow optFlowEstimator_;
-    gpu::GpuMat frame0_, frame1_, flowX_, flowY_, errors_;
+    Ptr<cuda::DensePyrLKOpticalFlow> optFlowEstimator_;
+    cuda::GpuMat frame0_, frame1_, flowX_, flowY_, errors_;
 };
+
 #endif
+
+//! @}
 
 } // namespace videostab
 } // namespace cv

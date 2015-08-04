@@ -1,5 +1,6 @@
 #include "opencv2/video/tracking.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
+#include "opencv2/videoio/videoio.hpp"
 #include "opencv2/highgui/highgui.hpp"
 
 #include <iostream>
@@ -36,19 +37,21 @@ int main(int, char**)
     if( !cap.isOpened() )
         return -1;
 
-    Mat prevgray, gray, flow, cflow, frame;
+    Mat flow, cflow, frame;
+    UMat gray, prevgray, uflow;
     namedWindow("flow", 1);
 
     for(;;)
     {
         cap >> frame;
-        cvtColor(frame, gray, CV_BGR2GRAY);
+        cvtColor(frame, gray, COLOR_BGR2GRAY);
 
-        if( prevgray.data )
+        if( !prevgray.empty() )
         {
-            calcOpticalFlowFarneback(prevgray, gray, flow, 0.5, 3, 15, 3, 5, 1.2, 0);
-            cvtColor(prevgray, cflow, CV_GRAY2BGR);
-            drawOptFlowMap(flow, cflow, 16, 1.5, CV_RGB(0, 255, 0));
+            calcOpticalFlowFarneback(prevgray, gray, uflow, 0.5, 3, 15, 3, 5, 1.2, 0);
+            cvtColor(prevgray, cflow, COLOR_GRAY2BGR);
+            uflow.copyTo(flow);
+            drawOptFlowMap(flow, cflow, 16, 1.5, Scalar(0, 255, 0));
             imshow("flow", cflow);
         }
         if(waitKey(30)>=0)

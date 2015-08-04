@@ -99,6 +99,8 @@ CV_ColorCvtBaseTest::CV_ColorCvtBaseTest( bool _custom_inv_transform, bool _allo
 
     test_cpp = false;
     hue_range = 0;
+    blue_idx = 0;
+    inplace = false;
 }
 
 
@@ -1168,8 +1170,8 @@ void CV_ColorLuvTest::convert_row_bgr2abc_32f_c3( const float* src_row, float* d
     {
         u_scale = 0.720338983f;
         u_bias = 96.5254237f;
-        v_scale = 0.99609375f;
-        v_bias = 139.453125f;
+        v_scale = 0.973282442f;
+        v_bias = 136.2595419f;
     }
 
     for( j = 0; j < n*3; j += 3 )
@@ -1221,8 +1223,8 @@ void CV_ColorLuvTest::convert_row_abc2bgr_32f_c3( const float* src_row, float* d
     {
         u_scale = 1.f/0.720338983f;
         u_bias = 96.5254237f;
-        v_scale = 1.f/0.99609375f;
-        v_bias = 139.453125f;
+        v_scale = 1.f/0.973282442f;
+        v_bias = 136.2595419f;
     }
 
     for( j = 0; j < n*3; j += 3 )
@@ -1687,11 +1689,11 @@ TEST(Imgproc_ColorBayer, regression)
 {
     cvtest::TS* ts = cvtest::TS::ptr();
 
-    Mat given = imread(string(ts->get_data_path()) + "/cvtcolor/bayer_input.png", CV_LOAD_IMAGE_GRAYSCALE);
-    Mat gold = imread(string(ts->get_data_path()) + "/cvtcolor/bayer_gold.png", CV_LOAD_IMAGE_UNCHANGED);
+    Mat given = imread(string(ts->get_data_path()) + "/cvtcolor/bayer_input.png", IMREAD_GRAYSCALE);
+    Mat gold = imread(string(ts->get_data_path()) + "/cvtcolor/bayer_gold.png", IMREAD_UNCHANGED);
     Mat result;
-    
-    CV_Assert(given.data != NULL && gold.data != NULL);
+
+    CV_Assert( !given.empty() && !gold.empty() );
 
     cvtColor(given, result, CV_BayerBG2GRAY);
 
@@ -1709,12 +1711,12 @@ TEST(Imgproc_ColorBayerVNG, regression)
 {
     cvtest::TS* ts = cvtest::TS::ptr();
 
-    Mat given = imread(string(ts->get_data_path()) + "/cvtcolor/bayer_input.png", CV_LOAD_IMAGE_GRAYSCALE);
+    Mat given = imread(string(ts->get_data_path()) + "/cvtcolor/bayer_input.png", IMREAD_GRAYSCALE);
     string goldfname = string(ts->get_data_path()) + "/cvtcolor/bayerVNG_gold.png";
-    Mat gold = imread(goldfname, CV_LOAD_IMAGE_UNCHANGED);
+    Mat gold = imread(goldfname, IMREAD_UNCHANGED);
     Mat result;
 
-    CV_Assert(given.data != NULL);
+    CV_Assert( !given.empty() );
 
     cvtColor(given, result, CV_BayerBG2BGR_VNG, 3);
 
@@ -1804,9 +1806,9 @@ TEST(Imgproc_ColorBayerVNG_Strict, regression)
 
     Mat src, dst, bayer, reference;
     std::string full_path = parent_path + image_name;
-    src = imread(full_path, CV_LOAD_IMAGE_UNCHANGED);
+    src = imread(full_path, IMREAD_UNCHANGED);
 
-    if (src.data == NULL)
+    if ( src.empty() )
     {
         ts->set_failed_test_info(cvtest::TS::FAIL_MISSING_TEST_DATA);
         ts->printf(cvtest::TS::SUMMARY, "No input image\n");
@@ -1824,8 +1826,8 @@ TEST(Imgproc_ColorBayerVNG_Strict, regression)
 
         // reading a reference image
         full_path = parent_path + pattern[i] + image_name;
-        reference = imread(full_path, CV_LOAD_IMAGE_UNCHANGED);
-        if (reference.data == NULL)
+        reference = imread(full_path, IMREAD_UNCHANGED);
+        if ( reference.empty() )
         {
             imwrite(full_path, dst);
             continue;
@@ -1960,7 +1962,7 @@ static void test_Bayer2RGB_EdgeAware_8u(const Mat& src, Mat& dst, int code)
     int dcn = dst.channels();
     CV_Assert(dcn == 3);
 
-    int step = src.step;
+    int step = (int)src.step;
     const uchar* S = src.ptr<uchar>(1) + 1;
     uchar* D = dst.ptr<uchar>(1) + dcn;
 
@@ -2033,7 +2035,7 @@ static void test_Bayer2RGB_EdgeAware_8u(const Mat& src, Mat& dst, int code)
     }
 
     ++size.width;
-    uchar* firstRow = dst.data, *lastRow = dst.data + size.height * dst.step;
+    uchar* firstRow = dst.ptr(), *lastRow = dst.ptr(size.height);
     size.width *= dcn;
     for (int x = 0; x < size.width; ++x)
     {
@@ -2056,8 +2058,8 @@ static void checkData(const Mat& actual, const Mat& reference, cvtest::TS* ts, c
 
     for (int y = 0; y < size.height && next; ++y)
     {
-        const T* A = reinterpret_cast<const T*>(actual.data + actual.step * y);
-        const T* R = reinterpret_cast<const T*>(reference.data + reference.step * y);
+        const T* A = actual.ptr<T>(y);
+        const T* R = reference.ptr<T>(y);
 
         for (int x = 0; x < size.width && next; ++x)
             if (std::abs(A[x] - R[x]) > 1)
@@ -2091,9 +2093,9 @@ TEST(ImgProc_BayerEdgeAwareDemosaicing, accuracy)
 
     Mat src, bayer;
     std::string full_path = parent_path + image_name;
-    src = imread(full_path, CV_LOAD_IMAGE_UNCHANGED);
+    src = imread(full_path, IMREAD_UNCHANGED);
 
-    if (src.data == NULL)
+    if (src.empty())
     {
         ts->set_failed_test_info(cvtest::TS::FAIL_MISSING_TEST_DATA);
         ts->printf(cvtest::TS::SUMMARY, "No input image\n");
@@ -2141,7 +2143,7 @@ TEST(ImgProc_BayerEdgeAwareDemosaicing, accuracy)
 TEST(ImgProc_Bayer2RGBA, accuracy)
 {
     cvtest::TS* ts = cvtest::TS::ptr();
-    Mat raw = imread(string(ts->get_data_path()) + "/cvtcolor/bayer_input.png", CV_LOAD_IMAGE_GRAYSCALE);
+    Mat raw = imread(string(ts->get_data_path()) + "/cvtcolor/bayer_input.png", IMREAD_GRAYSCALE);
     Mat rgb, reference;
 
     CV_Assert(raw.channels() == 1);

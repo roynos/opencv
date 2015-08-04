@@ -1,29 +1,31 @@
 #include <iostream>
 #include <string>
 
-#include "opencv2/core/core.hpp"
-#include "opencv2/gpu/gpu.hpp"
-#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/core.hpp"
+#include "opencv2/core/utility.hpp"
+#include "opencv2/cudabgsegm.hpp"
+#include "opencv2/cudalegacy.hpp"
+#include "opencv2/video.hpp"
+#include "opencv2/highgui.hpp"
 
 using namespace std;
 using namespace cv;
-using namespace cv::gpu;
+using namespace cv::cuda;
 
 enum Method
 {
-    FGD_STAT,
     MOG,
     MOG2,
-    VIBE,
-    GMG
+    GMG,
+    FGD_STAT
 };
 
 int main(int argc, const char** argv)
 {
     cv::CommandLineParser cmd(argc, argv,
         "{ c camera |             | use camera }"
-        "{ f file   | 768x576.avi | input video file }"
-        "{ m method | mog         | method (fgd, mog, mog2, vibe, gmg) }"
+        "{ f file   | ../data/768x576.avi | input video file }"
+        "{ m method | mog         | method (mog, mog2, gmg, fgd) }"
         "{ h help   |             | print help message }");
 
     if (cmd.has("help") || !cmd.check())
@@ -37,13 +39,19 @@ int main(int argc, const char** argv)
     string file = cmd.get<string>("file");
     string method = cmd.get<string>("method");
 
-    if (method != "fgd" && method != "mog" && method != "mog2" && method != "vibe" && method != "gmg")
+    if (method != "mog"
+        && method != "mog2"
+        && method != "gmg"
+        && method != "fgd")
     {
         cerr << "Incorrect method" << endl;
         return -1;
     }
 
-    Method m = method == "fgd" ? FGD_STAT : method == "mog" ? MOG : method == "mog2" ? MOG2 : method == "vibe" ? VIBE : GMG;
+    Method m = method == "mog" ? MOG :
+               method == "mog2" ? MOG2 :
+               method == "fgd" ? FGD_STAT :
+                                  GMG;
 
     VideoCapture cap;
 
@@ -63,12 +71,10 @@ int main(int argc, const char** argv)
 
     GpuMat d_frame(frame);
 
-    FGDStatModel fgd_stat;
-    MOG_GPU mog;
-    MOG2_GPU mog2;
-    VIBE_GPU vibe;
-    GMG_GPU gmg;
-    gmg.numInitializationFrames = 40;
+    Ptr<BackgroundSubtractor> mog = cuda::createBackgroundSubtractorMOG();
+    Ptr<BackgroundSubtractor> mog2 = cuda::createBackgroundSubtractorMOG2();
+    Ptr<BackgroundSubtractor> gmg = cuda::createBackgroundSubtractorGMG(40);
+    Ptr<BackgroundSubtractor> fgd = cuda::createBackgroundSubtractorFGD();
 
     GpuMat d_fgmask;
     GpuMat d_fgimg;
@@ -80,32 +86,30 @@ int main(int argc, const char** argv)
 
     switch (m)
     {
-    case FGD_STAT:
-        fgd_stat.create(d_frame);
-        break;
-
     case MOG:
-        mog(d_frame, d_fgmask, 0.01f);
+        mog->apply(d_frame, d_fgmask, 0.01);
         break;
 
     case MOG2:
-        mog2(d_frame, d_fgmask);
-        break;
-
-    case VIBE:
-        vibe.initialize(d_frame);
+        mog2->apply(d_frame, d_fgmask);
         break;
 
     case GMG:
-        gmg.initialize(d_frame.size());
+        gmg->apply(d_frame, d_fgmask);
+        break;
+
+    case FGD_STAT:
+        fgd->apply(d_frame, d_fgmask);
         break;
     }
 
     namedWindow("image", WINDOW_NORMAL);
     namedWindow("foreground mask", WINDOW_NORMAL);
     namedWindow("foreground image", WINDOW_NORMAL);
-    if (m != VIBE && m != GMG)
+    if (m != GMG)
+    {
         namedWindow("mean background image", WINDOW_NORMAL);
+    }
 
     for(;;)
     {
@@ -119,34 +123,30 @@ int main(int argc, const char** argv)
         //update the model
         switch (m)
         {
-        case FGD_STAT:
-            fgd_stat.update(d_frame);
-            d_fgmask = fgd_stat.foreground;
-            d_bgimg = fgd_stat.background;
-            break;
-
         case MOG:
-            mog(d_frame, d_fgmask, 0.01f);
-            mog.getBackgroundImage(d_bgimg);
+            mog->apply(d_frame, d_fgmask, 0.01);
+            mog->getBackgroundImage(d_bgimg);
             break;
 
         case MOG2:
-            mog2(d_frame, d_fgmask);
-            mog2.getBackgroundImage(d_bgimg);
-            break;
-
-        case VIBE:
-            vibe(d_frame, d_fgmask);
+            mog2->apply(d_frame, d_fgmask);
+            mog2->getBackgroundImage(d_bgimg);
             break;
 
         case GMG:
-            gmg(d_frame, d_fgmask);
+            gmg->apply(d_frame, d_fgmask);
+            break;
+
+        case FGD_STAT:
+            fgd->apply(d_frame, d_fgmask);
+            fgd->getBackgroundImage(d_bgimg);
             break;
         }
 
         double fps = cv::getTickFrequency() / (cv::getTickCount() - start);
         std::cout << "FPS : " << fps << std::endl;
 
+        d_fgimg.create(d_frame.size(), d_frame.type());
         d_fgimg.setTo(Scalar::all(0));
         d_frame.copyTo(d_fgimg, d_fgmask);
 

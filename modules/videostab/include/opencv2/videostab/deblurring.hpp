@@ -44,12 +44,15 @@
 #define __OPENCV_VIDEOSTAB_DEBLURRING_HPP__
 
 #include <vector>
-#include "opencv2/core/core.hpp"
+#include "opencv2/core.hpp"
 
 namespace cv
 {
 namespace videostab
 {
+
+//! @addtogroup videostab
+//! @{
 
 CV_EXPORTS float calcBlurriness(const Mat &frame);
 
@@ -104,6 +107,8 @@ private:
     float sensitivity_;
     Mat_<float> bSum_, gSum_, rSum_, wSum_;
 };
+
+//! @}
 
 } // namespace videostab
 } // namespace cv

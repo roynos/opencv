@@ -1,15 +1,26 @@
 package org.opencv.android;
 
-import java.util.StringTokenizer;
+import org.opencv.core.Core;
 
+import java.util.StringTokenizer;
 import android.util.Log;
 
 class StaticHelper {
 
-    public static boolean initOpenCV()
+    public static boolean initOpenCV(boolean InitCuda)
     {
         boolean result;
         String libs = "";
+
+        if(InitCuda)
+        {
+            loadLibrary("cudart");
+            loadLibrary("nppc");
+            loadLibrary("nppi");
+            loadLibrary("npps");
+            loadLibrary("cufft");
+            loadLibrary("cublas");
+        }
 
         Log.d(TAG, "Trying to get library list");
 
@@ -28,6 +39,10 @@ class StaticHelper {
         if (initOpenCVLibs(libs))
         {
             Log.d(TAG, "First attempt to load libs is OK");
+            String eol = System.getProperty("line.separator");
+            for (String str : Core.getBuildInformation().split(eol))
+                Log.i(TAG, str);
+
             result = true;
         }
         else
@@ -47,7 +62,7 @@ class StaticHelper {
         try
         {
             System.loadLibrary(Name);
-            Log.d(TAG, "OpenCV libs init was ok!");
+            Log.d(TAG, "Library " + Name + " loaded");
         }
         catch(UnsatisfiedLinkError e)
         {
@@ -77,7 +92,7 @@ class StaticHelper {
         else
         {
             // If dependencies list is not defined or empty.
-            result &= loadLibrary("opencv_java");
+            result &= loadLibrary("opencv_java3");
         }
 
         return result;

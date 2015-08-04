@@ -37,8 +37,8 @@ bool Core_RandTest::check_pdf(const Mat& hist, double scale,
                             int dist_type, double& refval, double& realval)
 {
     Mat hist0(hist.size(), CV_32F);
-    const int* H = (const int*)hist.data;
-    float* H0 = ((float*)hist0.data);
+    const int* H = hist.ptr<int>();
+    float* H0 = hist0.ptr<float>();
     int i, hsz = hist.cols;
 
     double sum = 0;
@@ -174,7 +174,7 @@ void Core_RandTest::run( int )
             }
         }
 
-        if( maxk >= 1 && norm(arr[0], arr[1], NORM_INF) > eps)
+        if( maxk >= 1 && cvtest::norm(arr[0], arr[1], NORM_INF) > eps)
         {
             ts->printf( cvtest::TS::LOG, "RNG output depends on the array lengths (some generated numbers get lost?)" );
             ts->set_failed_test_info( cvtest::TS::FAIL_INVALID_OUTPUT );
@@ -183,7 +183,7 @@ void Core_RandTest::run( int )
 
         for( c = 0; c < cn; c++ )
         {
-            const uchar* data = arr[0].data;
+            const uchar* data = arr[0].ptr();
             int* H = hist[c].ptr<int>();
             int HSZ = hist[c].cols;
             double minVal = dist_type == CV_RAND_UNI ? A[c] : A[c] - B[c]*4;
@@ -255,7 +255,7 @@ void Core_RandTest::run( int )
             int SDIM = cvtest::randInt(rng) % (MAX_SDIM-1) + 2;
             int N0 = (SZ*cn/SDIM), n = 0;
             double r2 = 0;
-            const uchar* data = arr[0].data;
+            const uchar* data = arr[0].ptr();
             double scale[4], delta[4];
             for( c = 0; c < cn; c++ )
             {
@@ -339,3 +339,29 @@ protected:
 
 TEST(Core_Rand, range) { Core_RandRangeTest test; test.safe_run(); }
 
+
+TEST(Core_RNG_MT19937, regression)
+{
+    cv::RNG_MT19937 rng;
+    int actual[61] = {0, };
+    const size_t length = (sizeof(actual) / sizeof(actual[0]));
+    for (int i = 0; i < 10000; ++i )
+    {
+        actual[(unsigned)(rng.next() ^ i) % length]++;
+    }
+
+    int expected[length] = {
+        177, 158, 180, 177,  160, 179, 143, 162,
+        177, 144, 170, 174,  165, 168, 168, 156,
+        177, 157, 159, 169,  177, 182, 166, 154,
+        144, 180, 168, 152,  170, 187, 160, 145,
+        139, 164, 157, 179,  148, 183, 159, 160,
+        196, 184, 149, 142,  162, 148, 163, 152,
+        168, 173, 160, 181,  172, 181, 155, 153,
+        158, 171, 138, 150,  150 };
+
+    for (size_t i = 0; i < length; ++i)
+    {
+        ASSERT_EQ(expected[i], actual[i]);
+    }
+}

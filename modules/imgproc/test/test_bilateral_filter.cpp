@@ -180,8 +180,8 @@ namespace cvtest
 
         for( i = 0; i < size.height; i++ )
         {
-            const float* sptr = (const float*)(temp.data + (i+radius)*temp.step) + radius*cn;
-            float* dptr = (float*)(dst.data + i*dst.step);
+            const float* sptr = temp.ptr<float>(i+radius) + radius*cn;
+            float* dptr = dst.ptr<float>(i);
 
             if( cn == 1 )
             {
@@ -251,7 +251,7 @@ namespace cvtest
 
     int CV_BilateralFilterTest::validate_test_results(int test_case_index)
     {
-        static const double eps = 1;
+        static const double eps = 4;
 
         Mat reference_dst, reference_src;
         if (_src.depth() == CV_32F)
@@ -264,7 +264,7 @@ namespace cvtest
             reference_dst.convertTo(reference_dst, type);
         }
 
-        double e = norm(reference_dst, _parallel_dst);
+        double e = cvtest::norm(reference_dst, _parallel_dst, NORM_L2);
         if (e > eps)
         {
             ts->printf(cvtest::TS::CONSOLE, "actual error: %g, expected: %g", e, eps);

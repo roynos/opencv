@@ -3,11 +3,13 @@
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
-#include "opencv2/core/core.hpp"
-#include "opencv2/video/video.hpp"
-#include "opencv2/imgproc/imgproc.hpp"
-#include "opencv2/highgui/highgui.hpp"
-#include "opencv2/videostab/videostab.hpp"
+#include "opencv2/core.hpp"
+#include <opencv2/core/utility.hpp>
+#include "opencv2/video.hpp"
+#include "opencv2/imgproc.hpp"
+#include "opencv2/videoio.hpp"
+#include "opencv2/highgui.hpp"
+#include "opencv2/videostab.hpp"
 #include "opencv2/opencv_modules.hpp"
 
 #define arg(name) cmd.get<string>(name)
@@ -47,7 +49,7 @@ void run()
         if (!outputPath.empty())
         {
             if (!writer.isOpened())
-                writer.open(outputPath, CV_FOURCC('X','V','I','D'),
+                writer.open(outputPath, VideoWriter::fourcc('X','V','I','D'),
                             outputFps, stabilizedFrame.size());
             writer << stabilizedFrame;
         }
@@ -125,7 +127,7 @@ void printHelp()
             "  --mosaic-stdev=<float_number>\n"
             "      Consistent mosaicing stdev threshold. The default is 10.0.\n\n"
             "  -mi, --motion-inpaint=(yes|no)\n"
-            "      Do motion inpainting (requires GPU support). The default is no.\n"
+            "      Do motion inpainting (requires CUDA support). The default is no.\n"
             "  --mi-dist-thresh=<float_number>\n"
             "      Estimated flow distance threshold for motion inpainting. The default is 5.0.\n\n"
             "  -ci, --color-inpaint=(no|average|ns|telea)\n"
@@ -159,7 +161,7 @@ void printHelp()
             "  -lm2, --load-motions2=(<file_path>|no)\n"
             "      Load motions for wobble suppression from file. The default is no.\n\n"
             "  -gpu=(yes|no)\n"
-            "      Use GPU optimization whenever possible. The default is no.\n\n"
+            "      Use CUDA optimization whenever possible. The default is no.\n\n"
             "  -o, --output=(no|<file_path>)\n"
             "      Set output file path explicitely. The default is stabilized.avi.\n"
             "  --fps=(<float_number>|auto)\n"
@@ -192,7 +194,7 @@ public:
 
     virtual Ptr<ImageMotionEstimatorBase> build()
     {
-        MotionEstimatorRansacL2 *est = new MotionEstimatorRansacL2(motionModel(arg(prefix + "model")));
+        Ptr<MotionEstimatorRansacL2> est = makePtr<MotionEstimatorRansacL2>(motionModel(arg(prefix + "model")));
 
         RansacParams ransac = est->ransacParams();
         if (arg(prefix + "subset") != "auto")
@@ -204,10 +206,10 @@ public:
 
         est->setMinInlierRatio(argf(prefix + "min-inlier-ratio"));
 
-        Ptr<IOutlierRejector> outlierRejector = new NullOutlierRejector();
+        Ptr<IOutlierRejector> outlierRejector = makePtr<NullOutlierRejector>();
         if (arg(prefix + "local-outlier-rejection") == "yes")
         {
-            TranslationBasedLocalOutlierRejector *tblor = new TranslationBasedLocalOutlierRejector();
+            Ptr<TranslationBasedLocalOutlierRejector> tblor = makePtr<TranslationBasedLocalOutlierRejector>();
             RansacParams ransacParams = tblor->ransacParams();
             if (arg(prefix + "thresh") != "auto")
                 ransacParams.thresh = argf(prefix + "thresh");
@@ -215,17 +217,17 @@ public:
             outlierRejector = tblor;
         }
 
-#ifdef HAVE_OPENCV_GPU
+#if defined(HAVE_OPENCV_CUDAIMGPROC) && defined(HAVE_OPENCV_CUDAOPTFLOW)
         if (gpu)
         {
-            KeypointBasedMotionEstimatorGpu *kbest = new KeypointBasedMotionEstimatorGpu(est);
+            Ptr<KeypointBasedMotionEstimatorGpu> kbest = makePtr<KeypointBasedMotionEstimatorGpu>(est);
             kbest->setOutlierRejector(outlierRejector);
             return kbest;
         }
 #endif
 
-        KeypointBasedMotionEstimator *kbest = new KeypointBasedMotionEstimator(est);
-        kbest->setDetector(new GoodFeaturesToTrackDetector(argi(prefix + "nkps")));
+        Ptr<KeypointBasedMotionEstimator> kbest = makePtr<KeypointBasedMotionEstimator>(est);
+        kbest->setDetector(GFTTDetector::create(argi(prefix + "nkps")));
         kbest->setOutlierRejector(outlierRejector);
         return kbest;
     }
@@ -243,12 +245,12 @@ public:
 
     virtual Ptr<ImageMotionEstimatorBase> build()
     {
-        MotionEstimatorL1 *est = new MotionEstimatorL1(motionModel(arg(prefix + "model")));
+        Ptr<MotionEstimatorL1> est = makePtr<MotionEstimatorL1>(motionModel(arg(prefix + "model")));
 
-        Ptr<IOutlierRejector> outlierRejector = new NullOutlierRejector();
+        Ptr<IOutlierRejector> outlierRejector = makePtr<NullOutlierRejector>();
         if (arg(prefix + "local-outlier-rejection") == "yes")
         {
-            TranslationBasedLocalOutlierRejector *tblor = new TranslationBasedLocalOutlierRejector();
+            Ptr<TranslationBasedLocalOutlierRejector> tblor = makePtr<TranslationBasedLocalOutlierRejector>();
             RansacParams ransacParams = tblor->ransacParams();
             if (arg(prefix + "thresh") != "auto")
                 ransacParams.thresh = argf(prefix + "thresh");
@@ -256,17 +258,17 @@ public:
             outlierRejector = tblor;
         }
 
-#ifdef HAVE_OPENCV_GPU
+#if defined(HAVE_OPENCV_CUDAIMGPROC) && defined(HAVE_OPENCV_CUDAOPTFLOW)
         if (gpu)
         {
-            KeypointBasedMotionEstimatorGpu *kbest = new KeypointBasedMotionEstimatorGpu(est);
+            Ptr<KeypointBasedMotionEstimatorGpu> kbest = makePtr<KeypointBasedMotionEstimatorGpu>(est);
             kbest->setOutlierRejector(outlierRejector);
             return kbest;
         }
 #endif
 
-        KeypointBasedMotionEstimator *kbest = new KeypointBasedMotionEstimator(est);
-        kbest->setDetector(new GoodFeaturesToTrackDetector(argi(prefix + "nkps")));
+        Ptr<KeypointBasedMotionEstimator> kbest = makePtr<KeypointBasedMotionEstimator>(est);
+        kbest->setDetector(GFTTDetector::create(argi(prefix + "nkps")));
         kbest->setOutlierRejector(outlierRejector);
         return kbest;
     }
@@ -341,28 +343,26 @@ int main(int argc, const char **argv)
             return 0;
         }
 
-#ifdef HAVE_OPENCV_GPU
         if (arg("gpu") == "yes")
         {
             cout << "initializing GPU..."; cout.flush();
             Mat hostTmp = Mat::zeros(1, 1, CV_32F);
-            gpu::GpuMat deviceTmp;
+            cuda::GpuMat deviceTmp;
             deviceTmp.upload(hostTmp);
             cout << endl;
         }
-#endif
 
         StabilizerBase *stabilizer = 0;
 
         // check if source video is specified
 
-        string inputPath = arg("1");
+        string inputPath = arg(0);
         if (inputPath.empty())
             throw runtime_error("specify video file path");
 
         // get source video parameters
 
-        VideoFileSource *source = new VideoFileSource(inputPath);
+        Ptr<VideoFileSource> source = makePtr<VideoFileSource>(inputPath);
         cout << "frame count (rough): " << source->count() << endl;
         if (arg("fps") == "auto")
             outputFps = source->fps();
@@ -373,15 +373,15 @@ int main(int argc, const char **argv)
 
         Ptr<IMotionEstimatorBuilder> motionEstBuilder;
         if (arg("lin-prog-motion-est") == "yes")
-            motionEstBuilder = new MotionEstimatorL1Builder(cmd, arg("gpu") == "yes");
+            motionEstBuilder.reset(new MotionEstimatorL1Builder(cmd, arg("gpu") == "yes"));
         else
-            motionEstBuilder = new MotionEstimatorRansacL2Builder(cmd, arg("gpu") == "yes");
+            motionEstBuilder.reset(new MotionEstimatorRansacL2Builder(cmd, arg("gpu") == "yes"));
 
         Ptr<IMotionEstimatorBuilder> wsMotionEstBuilder;
         if (arg("ws-lp") == "yes")
-            wsMotionEstBuilder = new MotionEstimatorL1Builder(cmd, arg("gpu") == "yes", "ws-");
+            wsMotionEstBuilder.reset(new MotionEstimatorL1Builder(cmd, arg("gpu") == "yes", "ws-"));
         else
-            wsMotionEstBuilder = new MotionEstimatorRansacL2Builder(cmd, arg("gpu") == "yes", "ws-");
+            wsMotionEstBuilder.reset(new MotionEstimatorRansacL2Builder(cmd, arg("gpu") == "yes", "ws-"));
 
         // determine whether we must use one pass or two pass stabilizer
         bool isTwoPass =
@@ -399,7 +399,7 @@ int main(int argc, const char **argv)
 
             if (arg("lin-prog-stab") == "yes")
             {
-                LpMotionStabilizer *stab = new LpMotionStabilizer();
+                Ptr<LpMotionStabilizer> stab = makePtr<LpMotionStabilizer>();
                 stab->setFrameSize(Size(source->width(), source->height()));
                 stab->setTrimRatio(arg("lps-trim-ratio") == "auto" ? argf("trim-ratio") : argf("lps-trim-ratio"));
                 stab->setWeight1(argf("lps-w1"));
@@ -409,20 +409,20 @@ int main(int argc, const char **argv)
                 twoPassStabilizer->setMotionStabilizer(stab);
             }
             else if (arg("stdev") == "auto")
-                twoPassStabilizer->setMotionStabilizer(new GaussianMotionFilter(argi("radius")));
+                twoPassStabilizer->setMotionStabilizer(makePtr<GaussianMotionFilter>(argi("radius")));
             else
-                twoPassStabilizer->setMotionStabilizer(new GaussianMotionFilter(argi("radius"), argf("stdev")));
+                twoPassStabilizer->setMotionStabilizer(makePtr<GaussianMotionFilter>(argi("radius"), argf("stdev")));
 
             // init wobble suppressor if necessary
 
             if (arg("wobble-suppress") == "yes")
             {
-                MoreAccurateMotionWobbleSuppressorBase *ws = new MoreAccurateMotionWobbleSuppressor();
+                Ptr<MoreAccurateMotionWobbleSuppressorBase> ws = makePtr<MoreAccurateMotionWobbleSuppressor>();
                 if (arg("gpu") == "yes")
-#ifdef HAVE_OPENCV_GPU
-                    ws = new MoreAccurateMotionWobbleSuppressorGpu();
+#ifdef HAVE_OPENCV_CUDAWARPING
+                    ws = makePtr<MoreAccurateMotionWobbleSuppressorGpu>();
 #else
-                    throw runtime_error("OpenCV is built without GPU support");
+                    throw runtime_error("OpenCV is built without CUDA support");
 #endif
 
                 ws->setMotionEstimator(wsMotionEstBuilder->build());
@@ -432,12 +432,12 @@ int main(int argc, const char **argv)
                 MotionModel model = ws->motionEstimator()->motionModel();
                 if (arg("load-motions2") != "no")
                 {
-                    ws->setMotionEstimator(new FromFileMotionReader(arg("load-motions2")));
+                    ws->setMotionEstimator(makePtr<FromFileMotionReader>(arg("load-motions2")));
                     ws->motionEstimator()->setMotionModel(model);
                 }
                 if (arg("save-motions2") != "no")
                 {
-                    ws->setMotionEstimator(new ToFileMotionWriter(arg("save-motions2"), ws->motionEstimator()));
+                    ws->setMotionEstimator(makePtr<ToFileMotionWriter>(arg("save-motions2"), ws->motionEstimator()));
                     ws->motionEstimator()->setMotionModel(model);
                 }
             }
@@ -449,26 +449,26 @@ int main(int argc, const char **argv)
             OnePassStabilizer *onePassStabilizer = new OnePassStabilizer();
             stabilizer = onePassStabilizer;
             if (arg("stdev") == "auto")
-                onePassStabilizer->setMotionFilter(new GaussianMotionFilter(argi("radius")));
+                onePassStabilizer->setMotionFilter(makePtr<GaussianMotionFilter>(argi("radius")));
             else
-                onePassStabilizer->setMotionFilter(new GaussianMotionFilter(argi("radius"), argf("stdev")));
+                onePassStabilizer->setMotionFilter(makePtr<GaussianMotionFilter>(argi("radius"), argf("stdev")));
         }
 
         stabilizer->setFrameSource(source);
         stabilizer->setMotionEstimator(motionEstBuilder->build());
 
         // cast stabilizer to simple frame source interface to read stabilized frames
-        stabilizedFrames = dynamic_cast<IFrameSource*>(stabilizer);
+        stabilizedFrames.reset(dynamic_cast<IFrameSource*>(stabilizer));
 
         MotionModel model = stabilizer->motionEstimator()->motionModel();
         if (arg("load-motions") != "no")
         {
-            stabilizer->setMotionEstimator(new FromFileMotionReader(arg("load-motions")));
+            stabilizer->setMotionEstimator(makePtr<FromFileMotionReader>(arg("load-motions")));
             stabilizer->motionEstimator()->setMotionModel(model);
         }
         if (arg("save-motions") != "no")
         {
-            stabilizer->setMotionEstimator(new ToFileMotionWriter(arg("save-motions"), stabilizer->motionEstimator()));
+            stabilizer->setMotionEstimator(makePtr<ToFileMotionWriter>(arg("save-motions"), stabilizer->motionEstimator()));
             stabilizer->motionEstimator()->setMotionModel(model);
         }
 
@@ -477,7 +477,7 @@ int main(int argc, const char **argv)
         // init deblurer
         if (arg("deblur") == "yes")
         {
-            WeightingDeblurer *deblurer = new WeightingDeblurer();
+            Ptr<WeightingDeblurer> deblurer = makePtr<WeightingDeblurer>();
             deblurer->setRadius(argi("radius"));
             deblurer->setSensitivity(argf("deblur-sens"));
             stabilizer->setDeblurer(deblurer);
@@ -502,22 +502,22 @@ int main(int argc, const char **argv)
         Ptr<InpainterBase> inpainters_(inpainters);
         if (arg("mosaic") == "yes")
         {
-            ConsistentMosaicInpainter *inp = new ConsistentMosaicInpainter();
+            Ptr<ConsistentMosaicInpainter> inp = makePtr<ConsistentMosaicInpainter>();
             inp->setStdevThresh(argf("mosaic-stdev"));
             inpainters->pushBack(inp);
         }
         if (arg("motion-inpaint") == "yes")
         {
-            MotionInpainter *inp = new MotionInpainter();
+            Ptr<MotionInpainter> inp = makePtr<MotionInpainter>();
             inp->setDistThreshold(argf("mi-dist-thresh"));
             inpainters->pushBack(inp);
         }
         if (arg("color-inpaint") == "average")
-            inpainters->pushBack(new ColorAverageInpainter());
+            inpainters->pushBack(makePtr<ColorAverageInpainter>());
         else if (arg("color-inpaint") == "ns")
-            inpainters->pushBack(new ColorInpainter(INPAINT_NS, argd("ci-radius")));
+            inpainters->pushBack(makePtr<ColorInpainter>(int(INPAINT_NS), argd("ci-radius")));
         else if (arg("color-inpaint") == "telea")
-            inpainters->pushBack(new ColorInpainter(INPAINT_TELEA, argd("ci-radius")));
+            inpainters->pushBack(makePtr<ColorInpainter>(int(INPAINT_TELEA), argd("ci-radius")));
         else if (arg("color-inpaint") != "no")
             throw runtime_error("unknown color inpainting method: " + arg("color-inpaint"));
         if (!inpainters->empty())

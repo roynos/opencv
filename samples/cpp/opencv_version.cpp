@@ -1,4 +1,4 @@
-#include "opencv2/core/core.hpp"
+#include <opencv2/core/utility.hpp>
 #include <iostream>
 
 const char* keys =
@@ -25,7 +25,7 @@ int main(int argc, const char* argv[])
     }
     else
     {
-        std::cout << "OpenCV " << CV_VERSION << std::endl;
+        std::cout << "Welcome to OpenCV " << CV_VERSION << std::endl;
     }
 
     return 0;

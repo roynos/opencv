@@ -2,6 +2,10 @@
 #include <float.h>
 #include <limits.h>
 
+#ifdef HAVE_TEGRA_OPTIMIZATION
+#include "tegra.hpp"
+#endif
+
 using namespace cv;
 
 namespace cvtest
@@ -71,7 +75,7 @@ int randomType(RNG& rng, int typeMask, int minChannels, int maxChannels)
 {
     int channels = rng.uniform(minChannels, maxChannels+1);
     int depth = 0;
-    CV_Assert((typeMask & DEPTH_MASK_ALL) != 0);
+    CV_Assert((typeMask & _OutputArray::DEPTH_MASK_ALL) != 0);
     for(;;)
     {
         depth = rng.uniform(CV_8U, CV_64F+1);
@@ -112,7 +116,7 @@ Mat randomMat(RNG& rng, Size size, int type, double minVal, double maxVal, bool 
 
     Mat m(size0, type);
 
-    rng.fill(m, RNG::UNIFORM, Scalar::all(minVal), Scalar::all(maxVal));
+    rng.fill(m, RNG::UNIFORM, minVal, maxVal);
     if( size0 == size )
         return m;
     return m(Rect((size0.width-size.width)/2, (size0.height-size.height)/2, size.width, size.height));
@@ -138,7 +142,7 @@ Mat randomMat(RNG& rng, const vector<int>& size, int type, double minVal, double
 
     Mat m(dims, &size0[0], type);
 
-    rng.fill(m, RNG::UNIFORM, Scalar::all(minVal), Scalar::all(maxVal));
+    rng.fill(m, RNG::UNIFORM, minVal, maxVal);
     if( eqsize )
         return m;
     return m(&r[0]);
@@ -186,7 +190,7 @@ void add(const Mat& _a, double alpha, const Mat& _b, double beta,
     if(!b.empty())
         buf[1].create(1, maxsize, CV_64FC(cn));
     buf[2].create(1, maxsize, CV_64FC(cn));
-    scalarToRawData(gamma, buf[2].data, CV_64FC(cn), (int)(maxsize*cn));
+    scalarToRawData(gamma, buf[2].ptr(), CV_64FC(cn), (int)(maxsize*cn));
 
     for( i = 0; i < nplanes; i++, ++it)
     {
@@ -199,8 +203,8 @@ void add(const Mat& _a, double alpha, const Mat& _b, double beta,
 
             apart0.convertTo(apart, apart.type(), alpha);
             size_t k, n = (j2 - j)*cn;
-            double* aptr = (double*)apart.data;
-            const double* gptr = (const double*)buf[2].data;
+            double* aptr = apart.ptr<double>();
+            const double* gptr = buf[2].ptr<double>();
 
             if( b.empty() )
             {
@@ -212,7 +216,7 @@ void add(const Mat& _a, double alpha, const Mat& _b, double beta,
                 Mat bpart0 = planes[1].colRange((int)j, (int)j2);
                 Mat bpart = buf[1].colRange(0, (int)(j2 - j));
                 bpart0.convertTo(bpart, bpart.type(), beta);
-                const double* bptr = (const double*)bpart.data;
+                const double* bptr = bpart.ptr<double>();
 
                 for( k = 0; k < n; k++ )
                     aptr[k] += bptr[k] + gptr[k];
@@ -272,10 +276,13 @@ convertTo(const _Tp* src, void* dst, int dtype, size_t total, double alpha, doub
     }
 }
 
-void convert(const Mat& src, Mat& dst, int dtype, double alpha, double beta)
+void convert(const Mat& src, cv::OutputArray _dst, int dtype, double alpha, double beta)
 {
+    if (dtype < 0) dtype = _dst.depth();
+
     dtype = CV_MAKETYPE(CV_MAT_DEPTH(dtype), src.channels());
-    dst.create(src.dims, &src.size[0], dtype);
+    _dst.create(src.dims, &src.size[0], dtype);
+    Mat dst = _dst.getMat();
     if( alpha == 0 )
     {
         set( dst, Scalar::all(beta) );
@@ -296,8 +303,8 @@ void convert(const Mat& src, Mat& dst, int dtype, double alpha, double beta)
 
     for( i = 0; i < nplanes; i++, ++it)
     {
-        const uchar* sptr = planes[0].data;
-        uchar* dptr = planes[1].data;
+        const uchar* sptr = planes[0].ptr();
+        uchar* dptr = planes[1].ptr();
 
         switch( src.depth() )
         {
@@ -340,7 +347,7 @@ void copy(const Mat& src, Mat& dst, const Mat& mask, bool invertMask)
         size_t planeSize = planes[0].total()*src.elemSize();
 
         for( i = 0; i < nplanes; i++, ++it )
-            memcpy(planes[1].data, planes[0].data, planeSize);
+            memcpy(planes[1].ptr(), planes[0].ptr(), planeSize);
 
         return;
     }
@@ -356,9 +363,9 @@ void copy(const Mat& src, Mat& dst, const Mat& mask, bool invertMask)
 
     for( i = 0; i < nplanes; i++, ++it)
     {
-        const uchar* sptr = planes[0].data;
-        uchar* dptr = planes[1].data;
-        const uchar* mptr = planes[2].data;
+        const uchar* sptr = planes[0].ptr();
+        uchar* dptr = planes[1].ptr();
+        const uchar* mptr = planes[2].ptr();
 
         for( j = 0; j < total; j++, sptr += elemSize, dptr += elemSize )
         {
@@ -391,7 +398,7 @@ void set(Mat& dst, const Scalar& gamma, const Mat& mask)
 
         for( i = 0; i < nplanes; i++, ++it )
         {
-            uchar* dptr = plane.data;
+            uchar* dptr = plane.ptr();
             if( uniform )
                 memset( dptr, gptr[0], planeSize );
             else if( i == 0 )
@@ -401,7 +408,7 @@ void set(Mat& dst, const Scalar& gamma, const Mat& mask)
                         dptr[k] = gptr[k];
             }
             else
-                memcpy(dptr, dst.data, planeSize);
+                memcpy(dptr, dst.ptr(), planeSize);
         }
         return;
     }
@@ -417,8 +424,8 @@ void set(Mat& dst, const Scalar& gamma, const Mat& mask)
 
     for( i = 0; i < nplanes; i++, ++it)
     {
-        uchar* dptr = planes[0].data;
-        const uchar* mptr = planes[1].data;
+        uchar* dptr = planes[0].ptr();
+        const uchar* mptr = planes[1].ptr();
 
         for( j = 0; j < total; j++, dptr += elemSize )
         {
@@ -443,8 +450,8 @@ void insert(const Mat& src, Mat& dst, int coi)
 
     for( i = 0; i < nplanes; i++, ++it )
     {
-        const uchar* sptr = planes[0].data;
-        uchar* dptr = planes[1].data + coi*size0;
+        const uchar* sptr = planes[0].ptr();
+        uchar* dptr = planes[1].ptr() + coi*size0;
 
         for( j = 0; j < total; j++, sptr += size0, dptr += size1 )
         {
@@ -468,8 +475,8 @@ void extract(const Mat& src, Mat& dst, int coi)
 
     for( i = 0; i < nplanes; i++, ++it )
     {
-        const uchar* sptr = planes[0].data + coi*size1;
-        uchar* dptr = planes[1].data;
+        const uchar* sptr = planes[0].ptr() + coi*size1;
+        uchar* dptr = planes[1].ptr();
 
         for( j = 0; j < total; j++, sptr += size0, dptr += size1 )
         {
@@ -642,7 +649,7 @@ void erode(const Mat& _src, Mat& dst, const Mat& _kernel, Point anchor,
     }
     if( anchor == Point(-1,-1) )
         anchor = Point(kernel.cols/2, kernel.rows/2);
-    if( borderType == IPL_BORDER_CONSTANT )
+    if( borderType == BORDER_CONSTANT )
         borderValue = getMaxVal(src.depth());
     copyMakeBorder(_src, src, anchor.y, kernel.rows - anchor.y - 1,
                    anchor.x, kernel.cols - anchor.x - 1,
@@ -699,7 +706,7 @@ void dilate(const Mat& _src, Mat& dst, const Mat& _kernel, Point anchor,
     }
     if( anchor == Point(-1,-1) )
         anchor = Point(kernel.cols/2, kernel.rows/2);
-    if( borderType == IPL_BORDER_CONSTANT )
+    if( borderType == BORDER_CONSTANT )
         borderValue = getMinVal(src.depth());
     copyMakeBorder(_src, src, anchor.y, kernel.rows - anchor.y - 1,
                    anchor.x, kernel.cols - anchor.x - 1,
@@ -775,7 +782,7 @@ void filter2D(const Mat& _src, Mat& dst, int ddepth, const Mat& kernel,
     CV_Assert( kernel.type() == CV_32F || kernel.type() == CV_64F );
     if( anchor == Point(-1,-1) )
         anchor = Point(kernel.cols/2, kernel.rows/2);
-    if( borderType == IPL_BORDER_CONSTANT )
+    if( borderType == BORDER_CONSTANT )
         borderValue = getMinVal(src.depth());
     copyMakeBorder(_src, src, anchor.y, kernel.rows - anchor.y - 1,
                    anchor.x, kernel.cols - anchor.x - 1,
@@ -827,11 +834,11 @@ static int borderInterpolate( int p, int len, int borderType )
 {
     if( (unsigned)p < (unsigned)len )
         ;
-    else if( borderType == IPL_BORDER_REPLICATE )
+    else if( borderType == BORDER_REPLICATE )
         p = p < 0 ? 0 : len - 1;
-    else if( borderType == IPL_BORDER_REFLECT || borderType == IPL_BORDER_REFLECT_101 )
+    else if( borderType == BORDER_REFLECT || borderType == BORDER_REFLECT_101 )
     {
-        int delta = borderType == IPL_BORDER_REFLECT_101;
+        int delta = borderType == BORDER_REFLECT_101;
         if( len == 1 )
             return 0;
         do
@@ -843,17 +850,17 @@ static int borderInterpolate( int p, int len, int borderType )
         }
         while( (unsigned)p >= (unsigned)len );
     }
-    else if( borderType == IPL_BORDER_WRAP )
+    else if( borderType == BORDER_WRAP )
     {
         if( p < 0 )
             p -= ((p-len+1)/len)*len;
         if( p >= len )
             p %= len;
     }
-    else if( borderType == IPL_BORDER_CONSTANT )
+    else if( borderType == BORDER_CONSTANT )
         p = -1;
     else
-        CV_Error( CV_StsBadArg, "Unknown/unsupported border type" );
+        CV_Error( Error::StsBadArg, "Unknown/unsupported border type" );
     return p;
 }
 
@@ -865,7 +872,7 @@ void copyMakeBorder(const Mat& src, Mat& dst, int top, int bottom, int left, int
     int i, j, k, esz = (int)src.elemSize();
     int width = src.cols*esz, width1 = dst.cols*esz;
 
-    if( borderType == IPL_BORDER_CONSTANT )
+    if( borderType == BORDER_CONSTANT )
     {
         vector<uchar> valvec((src.cols + left + right)*esz);
         uchar* val = &valvec[0];
@@ -1048,8 +1055,8 @@ void minMaxLoc(const Mat& src, double* _minval, double* _maxval,
 
     for( i = 0; i < nplanes; i++, ++it, startidx += total )
     {
-        const uchar* sptr = planes[0].data;
-        const uchar* mptr = planes[1].data;
+        const uchar* sptr = planes[0].ptr();
+        const uchar* mptr = planes[1].ptr();
 
         switch( depth )
         {
@@ -1231,15 +1238,16 @@ norm_(const _Tp* src1, const _Tp* src2, size_t total, int cn, int normType, doub
 }
 
 
-double norm(const Mat& src, int normType, const Mat& mask)
+double norm(InputArray _src, int normType, InputArray _mask)
 {
+    Mat src = _src.getMat(), mask = _mask.getMat();
     if( normType == NORM_HAMMING || normType == NORM_HAMMING2 )
     {
         if( !mask.empty() )
         {
             Mat temp;
             bitwise_and(src, mask, temp);
-            return norm(temp, normType, Mat());
+            return cvtest::norm(temp, normType, Mat());
         }
 
         CV_Assert( src.depth() == CV_8U );
@@ -1254,7 +1262,7 @@ double norm(const Mat& src, int normType, const Mat& mask)
         int cellSize = normType == NORM_HAMMING ? 1 : 2;
 
         for( i = 0; i < nplanes; i++, ++it )
-            result += normHamming(planes[0].data, total, cellSize);
+            result += normHamming(planes[0].ptr(), total, cellSize);
         return result;
     }
     int normType0 = normType;
@@ -1274,8 +1282,8 @@ double norm(const Mat& src, int normType, const Mat& mask)
 
     for( i = 0; i < nplanes; i++, ++it )
     {
-        const uchar* sptr = planes[0].data;
-        const uchar* mptr = planes[1].data;
+        const uchar* sptr = planes[0].ptr();
+        const uchar* mptr = planes[1].ptr();
 
         switch( depth )
         {
@@ -1301,7 +1309,7 @@ double norm(const Mat& src, int normType, const Mat& mask)
             result = norm_((const double*)sptr, total, cn, normType, result, mptr);
             break;
         default:
-            CV_Error(CV_StsUnsupportedFormat, "");
+            CV_Error(Error::StsUnsupportedFormat, "");
         };
     }
     if( normType0 == NORM_L2 )
@@ -1310,8 +1318,12 @@ double norm(const Mat& src, int normType, const Mat& mask)
 }
 
 
-double norm(const Mat& src1, const Mat& src2, int normType, const Mat& mask)
+double norm(InputArray _src1, InputArray _src2, int normType, InputArray _mask)
 {
+    Mat src1 = _src1.getMat(), src2 = _src2.getMat(), mask = _mask.getMat();
+    bool isRelative = (normType & NORM_RELATIVE) != 0;
+    normType &= ~NORM_RELATIVE;
+
     if( normType == NORM_HAMMING || normType == NORM_HAMMING2 )
     {
         Mat temp;
@@ -1331,7 +1343,7 @@ double norm(const Mat& src1, const Mat& src2, int normType, const Mat& mask)
         int cellSize = normType == NORM_HAMMING ? 1 : 2;
 
         for( i = 0; i < nplanes; i++, ++it )
-            result += normHamming(planes[0].data, total, cellSize);
+            result += normHamming(planes[0].ptr(), total, cellSize);
         return result;
     }
     int normType0 = normType;
@@ -1351,9 +1363,9 @@ double norm(const Mat& src1, const Mat& src2, int normType, const Mat& mask)
 
     for( i = 0; i < nplanes; i++, ++it )
     {
-        const uchar* sptr1 = planes[0].data;
-        const uchar* sptr2 = planes[1].data;
-        const uchar* mptr = planes[2].data;
+        const uchar* sptr1 = planes[0].ptr();
+        const uchar* sptr2 = planes[1].ptr();
+        const uchar* mptr = planes[2].ptr();
 
         switch( depth )
         {
@@ -1379,14 +1391,20 @@ double norm(const Mat& src1, const Mat& src2, int normType, const Mat& mask)
             result = norm_((const double*)sptr1, (const double*)sptr2, total, cn, normType, result, mptr);
             break;
         default:
-            CV_Error(CV_StsUnsupportedFormat, "");
+            CV_Error(Error::StsUnsupportedFormat, "");
         };
     }
     if( normType0 == NORM_L2 )
         result = sqrt(result);
-    return result;
+    return isRelative ? result / (cvtest::norm(src2, normType) + DBL_EPSILON) : result;
 }
 
+double PSNR(InputArray _src1, InputArray _src2)
+{
+    CV_Assert( _src1.depth() == CV_8U );
+    double diff = std::sqrt(cvtest::norm(_src1, _src2, NORM_L2SQR)/(_src1.total()*_src1.channels()));
+    return 20*log10(255./(diff+DBL_EPSILON));
+}
 
 template<typename _Tp> static double
 crossCorr_(const _Tp* src1, const _Tp* src2, size_t total)
@@ -1411,8 +1429,8 @@ double crossCorr(const Mat& src1, const Mat& src2)
 
     for( i = 0; i < nplanes; i++, ++it )
     {
-        const uchar* sptr1 = planes[0].data;
-        const uchar* sptr2 = planes[1].data;
+        const uchar* sptr1 = planes[0].ptr();
+        const uchar* sptr2 = planes[1].ptr();
 
         switch( depth )
         {
@@ -1438,7 +1456,7 @@ double crossCorr(const Mat& src1, const Mat& src2)
             result += crossCorr_((const double*)sptr1, (const double*)sptr2, total);
             break;
         default:
-            CV_Error(CV_StsUnsupportedFormat, "");
+            CV_Error(Error::StsUnsupportedFormat, "");
         };
     }
     return result;
@@ -1508,9 +1526,9 @@ void logicOp( const Mat& src1, const Mat& src2, Mat& dst, char op )
 
     for( i = 0; i < nplanes; i++, ++it )
     {
-        const uchar* sptr1 = planes[0].data;
-        const uchar* sptr2 = planes[1].data;
-        uchar* dptr = planes[2].data;
+        const uchar* sptr1 = planes[0].ptr();
+        const uchar* sptr2 = planes[1].ptr();
+        uchar* dptr = planes[2].ptr();
 
         logicOp_(sptr1, sptr2, dptr, total, op);
     }
@@ -1532,8 +1550,8 @@ void logicOp(const Mat& src, const Scalar& s, Mat& dst, char op)
 
     for( i = 0; i < nplanes; i++, ++it )
     {
-        const uchar* sptr = planes[0].data;
-        uchar* dptr = planes[1].data;
+        const uchar* sptr = planes[0].ptr();
+        uchar* dptr = planes[1].ptr();
 
         logicOpS_(sptr, (uchar*)&buf[0], dptr, total, op);
     }
@@ -1571,7 +1589,7 @@ compare_(const _Tp* src1, const _Tp* src2, uchar* dst, size_t total, int cmpop)
             dst[i] = src1[i] > src2[i] ? 255 : 0;
         break;
     default:
-        CV_Error(CV_StsBadArg, "Unknown comparison operation");
+        CV_Error(Error::StsBadArg, "Unknown comparison operation");
     }
 }
 
@@ -1607,7 +1625,7 @@ compareS_(const _Tp* src1, _WTp value, uchar* dst, size_t total, int cmpop)
             dst[i] = src1[i] > value ? 255 : 0;
         break;
     default:
-        CV_Error(CV_StsBadArg, "Unknown comparison operation");
+        CV_Error(Error::StsBadArg, "Unknown comparison operation");
     }
 }
 
@@ -1626,9 +1644,9 @@ void compare(const Mat& src1, const Mat& src2, Mat& dst, int cmpop)
 
     for( i = 0; i < nplanes; i++, ++it )
     {
-        const uchar* sptr1 = planes[0].data;
-        const uchar* sptr2 = planes[1].data;
-        uchar* dptr = planes[2].data;
+        const uchar* sptr1 = planes[0].ptr();
+        const uchar* sptr2 = planes[1].ptr();
+        uchar* dptr = planes[2].ptr();
 
         switch( depth )
         {
@@ -1654,7 +1672,7 @@ void compare(const Mat& src1, const Mat& src2, Mat& dst, int cmpop)
             compare_((const double*)sptr1, (const double*)sptr2, dptr, total, cmpop);
             break;
         default:
-            CV_Error(CV_StsUnsupportedFormat, "");
+            CV_Error(Error::StsUnsupportedFormat, "");
         }
     }
 }
@@ -1674,8 +1692,8 @@ void compare(const Mat& src, double value, Mat& dst, int cmpop)
 
     for( i = 0; i < nplanes; i++, ++it )
     {
-        const uchar* sptr = planes[0].data;
-        uchar* dptr = planes[1].data;
+        const uchar* sptr = planes[0].ptr();
+        uchar* dptr = planes[1].ptr();
 
         switch( depth )
         {
@@ -1701,7 +1719,7 @@ void compare(const Mat& src, double value, Mat& dst, int cmpop)
             compareS_((const double*)sptr, value, dptr, total, cmpop);
             break;
         default:
-            CV_Error(CV_StsUnsupportedFormat, "");
+            CV_Error(Error::StsUnsupportedFormat, "");
         }
     }
 }
@@ -1805,8 +1823,8 @@ bool cmpUlps(const Mat& src1, const Mat& src2, int imaxDiff, double* _realmaxdif
 
     for( i = 0; i < nplanes; i++, ++it, startidx += total )
     {
-        const uchar* sptr1 = planes[0].data;
-        const uchar* sptr2 = planes[1].data;
+        const uchar* sptr1 = planes[0].ptr();
+        const uchar* sptr2 = planes[1].ptr();
         double realmaxdiff = 0;
 
         switch( depth )
@@ -1833,7 +1851,7 @@ bool cmpUlps(const Mat& src1, const Mat& src2, int imaxDiff, double* _realmaxdif
             realmaxdiff = cmpUlpsFlt_((const int64*)sptr1, (const int64*)sptr2, total, imaxDiff, startidx, idx);
             break;
         default:
-            CV_Error(CV_StsUnsupportedFormat, "");
+            CV_Error(Error::StsUnsupportedFormat, "");
         }
 
         if(_realmaxdiff)
@@ -1896,7 +1914,7 @@ int check( const Mat& a, double fmin, double fmax, vector<int>* _idx )
 
     for( i = 0; i < nplanes; i++, ++it, startidx += total )
     {
-        const uchar* aptr = plane.data;
+        const uchar* aptr = plane.ptr();
 
         switch( depth )
         {
@@ -1922,7 +1940,7 @@ int check( const Mat& a, double fmin, double fmax, vector<int>* _idx )
                 checkFlt_((const double*)aptr, total, fmin, fmax, startidx, idx);
                 break;
             default:
-                CV_Error(CV_StsUnsupportedFormat, "");
+                CV_Error(Error::StsUnsupportedFormat, "");
         }
 
         if( idx != 0 )
@@ -1934,6 +1952,10 @@ int check( const Mat& a, double fmin, double fmax, vector<int>* _idx )
     return idx == 0 ? 0 : -1;
 }
 
+#define CMP_EPS_OK 0
+#define CMP_EPS_BIG_DIFF -1
+#define CMP_EPS_INVALID_TEST_DATA -2 // there is NaN or Inf value in test data
+#define CMP_EPS_INVALID_REF_DATA -3 // there is NaN or Inf value in reference data
 
 // compares two arrays. max_diff is the maximum actual difference,
 // success_err_level is maximum allowed difference, idx is the index of the first
@@ -1946,7 +1968,7 @@ int cmpEps( const Mat& arr, const Mat& refarr, double* _realmaxdiff,
     CV_Assert( arr.type() == refarr.type() && arr.size == refarr.size );
 
     int ilevel = refarr.depth() <= CV_32S ? cvFloor(success_err_level) : 0;
-    int result = 0;
+    int result = CMP_EPS_OK;
 
     const Mat *arrays[]={&arr, &refarr, 0};
     Mat planes[2];
@@ -1968,8 +1990,8 @@ int cmpEps( const Mat& arr, const Mat& refarr, double* _realmaxdiff,
 
     for( i = 0; i < nplanes; i++, ++it, startidx += total )
     {
-        const uchar* sptr1 = planes[0].data;
-        const uchar* sptr2 = planes[1].data;
+        const uchar* sptr1 = planes[0].ptr();
+        const uchar* sptr2 = planes[1].ptr();
 
         switch( depth )
         {
@@ -1998,13 +2020,13 @@ int cmpEps( const Mat& arr, const Mat& refarr, double* _realmaxdiff,
                     continue;
                 if( cvIsNaN(a_val) || cvIsInf(a_val) )
                 {
-                    result = -2;
+                    result = CMP_EPS_INVALID_TEST_DATA;
                     idx = startidx + j;
                     break;
                 }
                 if( cvIsNaN(b_val) || cvIsInf(b_val) )
                 {
-                    result = -3;
+                    result = CMP_EPS_INVALID_REF_DATA;
                     idx = startidx + j;
                     break;
                 }
@@ -2029,13 +2051,13 @@ int cmpEps( const Mat& arr, const Mat& refarr, double* _realmaxdiff,
                     continue;
                 if( cvIsNaN(a_val) || cvIsInf(a_val) )
                 {
-                    result = -2;
+                    result = CMP_EPS_INVALID_TEST_DATA;
                     idx = startidx + j;
                     break;
                 }
                 if( cvIsNaN(b_val) || cvIsInf(b_val) )
                 {
-                    result = -3;
+                    result = CMP_EPS_INVALID_REF_DATA;
                     idx = startidx + j;
                     break;
                 }
@@ -2051,7 +2073,7 @@ int cmpEps( const Mat& arr, const Mat& refarr, double* _realmaxdiff,
             break;
         default:
             assert(0);
-            return -1;
+            return CMP_EPS_BIG_DIFF;
         }
         if(_realmaxdiff)
             *_realmaxdiff = MAX(*_realmaxdiff, realmaxdiff);
@@ -2060,7 +2082,7 @@ int cmpEps( const Mat& arr, const Mat& refarr, double* _realmaxdiff,
     }
 
     if( result == 0 && idx != 0 )
-        result = -1;
+        result = CMP_EPS_BIG_DIFF;
 
     if( result < -1 && _realmaxdiff )
         *_realmaxdiff = exp(1000.);
@@ -2081,15 +2103,15 @@ int cmpEps2( TS* ts, const Mat& a, const Mat& b, double success_err_level,
 
     switch( code )
     {
-    case -1:
+    case CMP_EPS_BIG_DIFF:
         sprintf( msg, "%s: Too big difference (=%g)", desc, diff );
         code = TS::FAIL_BAD_ACCURACY;
         break;
-    case -2:
+    case CMP_EPS_INVALID_TEST_DATA:
         sprintf( msg, "%s: Invalid output", desc );
         code = TS::FAIL_INVALID_OUTPUT;
         break;
-    case -3:
+    case CMP_EPS_INVALID_REF_DATA:
         sprintf( msg, "%s: Invalid reference output", desc );
         code = TS::FAIL_INVALID_OUTPUT;
         break;
@@ -2310,8 +2332,8 @@ void transform( const Mat& src, Mat& dst, const Mat& transmat, const Mat& _shift
 
     for( i = 0; i < nplanes; i++, ++it )
     {
-        const uchar* sptr = planes[0].data;
-        uchar* dptr = planes[1].data;
+        const uchar* sptr = planes[0].ptr();
+        uchar* dptr = planes[1].ptr();
 
         switch( depth )
         {
@@ -2337,7 +2359,7 @@ void transform( const Mat& src, Mat& dst, const Mat& transmat, const Mat& _shift
             transform_((const double*)sptr, (double*)dptr, total, scn, dcn, mat);
             break;
         default:
-            CV_Error(CV_StsUnsupportedFormat, "");
+            CV_Error(Error::StsUnsupportedFormat, "");
         }
     }
 }
@@ -2366,9 +2388,9 @@ static void minmax(const Mat& src1, const Mat& src2, Mat& dst, char op)
 
     for( i = 0; i < nplanes; i++, ++it )
     {
-        const uchar* sptr1 = planes[0].data;
-        const uchar* sptr2 = planes[1].data;
-        uchar* dptr = planes[2].data;
+        const uchar* sptr1 = planes[0].ptr();
+        const uchar* sptr2 = planes[1].ptr();
+        uchar* dptr = planes[2].ptr();
 
         switch( depth )
         {
@@ -2394,7 +2416,7 @@ static void minmax(const Mat& src1, const Mat& src2, Mat& dst, char op)
             minmax_((const double*)sptr1, (const double*)sptr2, (double*)dptr, total, op);
             break;
         default:
-            CV_Error(CV_StsUnsupportedFormat, "");
+            CV_Error(Error::StsUnsupportedFormat, "");
         }
     }
 }
@@ -2435,8 +2457,8 @@ static void minmax(const Mat& src1, double val, Mat& dst, char op)
 
     for( i = 0; i < nplanes; i++, ++it )
     {
-        const uchar* sptr1 = planes[0].data;
-        uchar* dptr = planes[1].data;
+        const uchar* sptr1 = planes[0].ptr();
+        uchar* dptr = planes[1].ptr();
 
         switch( depth )
         {
@@ -2462,7 +2484,7 @@ static void minmax(const Mat& src1, double val, Mat& dst, char op)
             minmax_((const double*)sptr1, saturate_cast<double>(val), (double*)dptr, total, op);
             break;
         default:
-            CV_Error(CV_StsUnsupportedFormat, "");
+            CV_Error(Error::StsUnsupportedFormat, "");
         }
     }
 }
@@ -2506,9 +2528,9 @@ static void muldiv(const Mat& src1, const Mat& src2, Mat& dst, double scale, cha
 
     for( i = 0; i < nplanes; i++, ++it )
     {
-        const uchar* sptr1 = planes[0].data;
-        const uchar* sptr2 = planes[1].data;
-        uchar* dptr = planes[2].data;
+        const uchar* sptr1 = planes[0].ptr();
+        const uchar* sptr2 = planes[1].ptr();
+        uchar* dptr = planes[2].ptr();
 
         switch( depth )
         {
@@ -2534,7 +2556,7 @@ static void muldiv(const Mat& src1, const Mat& src2, Mat& dst, double scale, cha
             muldiv_((const double*)sptr1, (const double*)sptr2, (double*)dptr, total, scale, op);
             break;
         default:
-            CV_Error(CV_StsUnsupportedFormat, "");
+            CV_Error(Error::StsUnsupportedFormat, "");
         }
     }
 }
@@ -2592,8 +2614,8 @@ Scalar mean(const Mat& src, const Mat& mask)
 
     for( i = 0; i < nplanes; i++, ++it )
     {
-        const uchar* sptr = planes[0].data;
-        const uchar* mptr = planes[1].data;
+        const uchar* sptr = planes[0].ptr();
+        const uchar* mptr = planes[1].ptr();
 
         switch( depth )
         {
@@ -2619,7 +2641,7 @@ Scalar mean(const Mat& src, const Mat& mask)
             mean_((const double*)sptr, mptr, total, cn, sum, nz);
             break;
         default:
-            CV_Error(CV_StsUnsupportedFormat, "");
+            CV_Error(Error::StsUnsupportedFormat, "");
         }
     }
 
@@ -2856,7 +2878,7 @@ static void writeElems(std::ostream& out, const void* data, int nelems, int dept
         out.precision(pp);
     }
     else
-        CV_Error(CV_StsUnsupportedFormat, "");
+        CV_Error(Error::StsUnsupportedFormat, "");
 }
 
 
@@ -2886,7 +2908,7 @@ static std::ostream& operator << (std::ostream& out, const MatPart& m)
 }
 
 MatComparator::MatComparator(double _maxdiff, int _context)
-    : maxdiff(_maxdiff), context(_context) {}
+    : maxdiff(_maxdiff), realmaxdiff(DBL_MAX), context(_context) {}
 
 ::testing::AssertionResult
 MatComparator::operator()(const char* expr1, const char* expr2,
@@ -2930,16 +2952,126 @@ MatComparator::operator()(const char* expr1, const char* expr2,
     << "'" << expr2 << "': " << MatPart(m2part, border > 0 ? &loc : 0) << ".\n";
 }
 
+void printVersionInfo(bool useStdOut)
+{
+    ::testing::Test::RecordProperty("cv_version", CV_VERSION);
+    if(useStdOut) std::cout << "OpenCV version: " << CV_VERSION << std::endl;
+
+    std::string buildInfo( cv::getBuildInformation() );
+
+    size_t pos1 = buildInfo.find("Version control");
+    size_t pos2 = buildInfo.find('\n', pos1);
+    if(pos1 != std::string::npos && pos2 != std::string::npos)
+    {
+        size_t value_start = buildInfo.rfind(' ', pos2) + 1;
+        std::string ver( buildInfo.substr(value_start, pos2 - value_start) );
+        ::testing::Test::RecordProperty("cv_vcs_version", ver);
+        if (useStdOut) std::cout << "OpenCV VCS version: " << ver << std::endl;
+    }
+
+    pos1 = buildInfo.find("inner version");
+    pos2 = buildInfo.find('\n', pos1);
+    if(pos1 != std::string::npos && pos2 != std::string::npos)
+    {
+        size_t value_start = buildInfo.rfind(' ', pos2) + 1;
+        std::string ver( buildInfo.substr(value_start, pos2 - value_start) );
+        ::testing::Test::RecordProperty("cv_inner_vcs_version", ver);
+        if(useStdOut) std::cout << "Inner VCS version: " << ver << std::endl;
+    }
+
+    const char * build_type =
+#ifdef _DEBUG
+        "debug";
+#else
+        "release";
+#endif
+
+    ::testing::Test::RecordProperty("cv_build_type", build_type);
+    if (useStdOut) std::cout << "Build type: " << build_type << std::endl;
+
+    const char* parallel_framework = currentParallelFramework();
+
+    if (parallel_framework) {
+        ::testing::Test::RecordProperty("cv_parallel_framework", parallel_framework);
+        if (useStdOut) std::cout << "Parallel framework: " << parallel_framework << std::endl;
+    }
+
+    std::string cpu_features;
+
+#if CV_POPCNT
+    if (checkHardwareSupport(CV_CPU_POPCNT)) cpu_features += " popcnt";
+#endif
+#if CV_MMX
+    if (checkHardwareSupport(CV_CPU_MMX)) cpu_features += " mmx";
+#endif
+#if CV_SSE
+    if (checkHardwareSupport(CV_CPU_SSE)) cpu_features += " sse";
+#endif
+#if CV_SSE2
+    if (checkHardwareSupport(CV_CPU_SSE2)) cpu_features += " sse2";
+#endif
+#if CV_SSE3
+    if (checkHardwareSupport(CV_CPU_SSE3)) cpu_features += " sse3";
+#endif
+#if CV_SSSE3
+    if (checkHardwareSupport(CV_CPU_SSSE3)) cpu_features += " ssse3";
+#endif
+#if CV_SSE4_1
+    if (checkHardwareSupport(CV_CPU_SSE4_1)) cpu_features += " sse4.1";
+#endif
+#if CV_SSE4_2
+    if (checkHardwareSupport(CV_CPU_SSE4_2)) cpu_features += " sse4.2";
+#endif
+#if CV_AVX
+    if (checkHardwareSupport(CV_CPU_AVX)) cpu_features += " avx";
+#endif
+#if CV_AVX2
+    if (checkHardwareSupport(CV_CPU_AVX2)) cpu_features += " avx2";
+#endif
+#if CV_FMA3
+    if (checkHardwareSupport(CV_CPU_FMA3)) cpu_features += " fma3";
+#endif
+#if CV_AVX_512F
+    if (checkHardwareSupport(CV_CPU_AVX_512F) cpu_features += " avx-512f";
+#endif
+#if CV_AVX_512BW
+    if (checkHardwareSupport(CV_CPU_AVX_512BW) cpu_features += " avx-512bw";
+#endif
+#if CV_AVX_512CD
+    if (checkHardwareSupport(CV_CPU_AVX_512CD) cpu_features += " avx-512cd";
+#endif
+#if CV_AVX_512DQ
+    if (checkHardwareSupport(CV_CPU_AVX_512DQ) cpu_features += " avx-512dq";
+#endif
+#if CV_AVX_512ER
+    if (checkHardwareSupport(CV_CPU_AVX_512ER) cpu_features += " avx-512er";
+#endif
+#if CV_AVX_512IFMA512
+    if (checkHardwareSupport(CV_CPU_AVX_512IFMA512) cpu_features += " avx-512ifma512";
+#endif
+#if CV_AVX_512PF
+    if (checkHardwareSupport(CV_CPU_AVX_512PF) cpu_features += " avx-512pf";
+#endif
+#if CV_AVX_512VBMI
+    if (checkHardwareSupport(CV_CPU_AVX_512VBMI) cpu_features += " avx-512vbmi";
+#endif
+#if CV_AVX_512VL
+    if (checkHardwareSupport(CV_CPU_AVX_512VL) cpu_features += " avx-512vl";
+#endif
+#if CV_NEON
+    if (checkHardwareSupport(CV_CPU_NEON)) cpu_features += " neon";
+#endif
+
+    cpu_features.erase(0, 1); // erase initial space
+
+    ::testing::Test::RecordProperty("cv_cpu_features", cpu_features);
+    if (useStdOut) std::cout << "CPU features: " << cpu_features << std::endl;
+
+#ifdef HAVE_TEGRA_OPTIMIZATION
+    const char * tegra_optimization = tegra::useTegra() && tegra::isDeviceSupported() ? "enabled" : "disabled";
+    ::testing::Test::RecordProperty("cv_tegra_optimization", tegra_optimization);
+    if (useStdOut) std::cout << "Tegra optimization: " << tegra_optimization << std::endl;
+#endif
 }
 
-void cvTsConvert( const CvMat* src, CvMat* dst )
-{
-    Mat _src = cvarrToMat(src), _dst = cvarrToMat(dst);
-    cvtest::convert(_src, _dst, _dst.depth());
-}
-
-void cvTsZero( CvMat* dst, const CvMat* mask )
-{
-    Mat _dst = cvarrToMat(dst), _mask = mask ? cvarrToMat(mask) : Mat();
-    cvtest::set(_dst, Scalar::all(0), _mask);
 }

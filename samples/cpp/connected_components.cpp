@@ -1,5 +1,7 @@
-#include "opencv2/imgproc/imgproc.hpp"
-#include "opencv2/highgui/highgui.hpp"
+#include <opencv2/core/utility.hpp>
+#include "opencv2/imgproc.hpp"
+#include "opencv2/imgcodecs.hpp"
+#include "opencv2/highgui.hpp"
 #include <iostream>
 
 using namespace cv;
@@ -34,21 +36,21 @@ static void help()
 {
     cout << "\n This program demonstrates connected components and use of the trackbar\n"
              "Usage: \n"
-             "  ./connected_components <image(stuff.jpg as default)>\n"
+             "  ./connected_components <image(../data/stuff.jpg as default)>\n"
              "The image is converted to grayscale and displayed, another image has a trackbar\n"
              "that controls thresholding and thereby the extracted contours which are drawn in color\n";
 }
 
 const char* keys =
 {
-    "{@image|stuff.jpg|image for converting to a grayscale}"
+    "{@image|../data/stuff.jpg|image for converting to a grayscale}"
 };
 
 int main( int argc, const char** argv )
 {
     help();
     CommandLineParser parser(argc, argv, keys);
-    string inputImage = parser.get<string>("@image");
+    string inputImage = parser.get<string>(0);
     img = imread(inputImage.c_str(), 0);
 
     if(img.empty())

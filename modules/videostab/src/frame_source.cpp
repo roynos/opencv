@@ -45,11 +45,9 @@
 #include "opencv2/videostab/ring_buffer.hpp"
 
 #include "opencv2/opencv_modules.hpp"
-#ifdef HAVE_OPENCV_HIGHGUI
-#  include "opencv2/highgui/highgui.hpp"
+#ifdef HAVE_OPENCV_VIDEOIO
+#  include "opencv2/videoio.hpp"
 #endif
-
-using namespace std;
 
 namespace cv
 {
@@ -61,35 +59,35 @@ namespace {
 class VideoFileSourceImpl : public IFrameSource
 {
 public:
-    VideoFileSourceImpl(const std::string &path, bool volatileFrame)
+    VideoFileSourceImpl(const String &path, bool volatileFrame)
         : path_(path), volatileFrame_(volatileFrame) { reset(); }
 
     virtual void reset()
     {
-#ifdef HAVE_OPENCV_HIGHGUI
+#ifdef HAVE_OPENCV_VIDEOIO
         vc.release();
         vc.open(path_);
         if (!vc.isOpened())
-            throw runtime_error("can't open file: " + path_);
+            CV_Error(0, "can't open file: " + path_);
 #else
-        CV_Error(CV_StsNotImplemented, "OpenCV has been compiled without video I/O support");
+        CV_Error(Error::StsNotImplemented, "OpenCV has been compiled without video I/O support");
 #endif
     }
 
     virtual Mat nextFrame()
     {
         Mat frame;
-#ifdef HAVE_OPENCV_HIGHGUI
+#ifdef HAVE_OPENCV_VIDEOIO
         vc >> frame;
 #endif
         return volatileFrame_ ? frame : frame.clone();
     }
 
-#ifdef HAVE_OPENCV_HIGHGUI
-    int width() {return static_cast<int>(vc.get(CV_CAP_PROP_FRAME_WIDTH));}
-    int height() {return static_cast<int>(vc.get(CV_CAP_PROP_FRAME_HEIGHT));}
-    int count() {return static_cast<int>(vc.get(CV_CAP_PROP_FRAME_COUNT));}
-    double fps() {return vc.get(CV_CAP_PROP_FPS);}
+#ifdef HAVE_OPENCV_VIDEOIO
+    int width() {return static_cast<int>(vc.get(CAP_PROP_FRAME_WIDTH));}
+    int height() {return static_cast<int>(vc.get(CAP_PROP_FRAME_HEIGHT));}
+    int count() {return static_cast<int>(vc.get(CAP_PROP_FRAME_COUNT));}
+    double fps() {return vc.get(CAP_PROP_FPS);}
 #else
     int width() {return 0;}
     int height() {return 0;}
@@ -98,25 +96,25 @@ public:
 #endif
 
 private:
-    std::string path_;
+    String path_;
     bool volatileFrame_;
-#ifdef HAVE_OPENCV_HIGHGUI
+#ifdef HAVE_OPENCV_VIDEOIO
     VideoCapture vc;
 #endif
 };
 
 }//namespace
 
-VideoFileSource::VideoFileSource(const string &path, bool volatileFrame)
+VideoFileSource::VideoFileSource(const String &path, bool volatileFrame)
     : impl(new VideoFileSourceImpl(path, volatileFrame)) {}
 
 void VideoFileSource::reset() { impl->reset(); }
 Mat VideoFileSource::nextFrame() { return impl->nextFrame(); }
 
-int VideoFileSource::width() { return ((VideoFileSourceImpl*)impl.obj)->width(); }
-int VideoFileSource::height() { return ((VideoFileSourceImpl*)impl.obj)->height(); }
-int VideoFileSource::count() { return ((VideoFileSourceImpl*)impl.obj)->count(); }
-double VideoFileSource::fps() { return ((VideoFileSourceImpl*)impl.obj)->fps(); }
+int VideoFileSource::width() { return ((VideoFileSourceImpl*)impl.get())->width(); }
+int VideoFileSource::height() { return ((VideoFileSourceImpl*)impl.get())->height(); }
+int VideoFileSource::count() { return ((VideoFileSourceImpl*)impl.get())->count(); }
+double VideoFileSource::fps() { return ((VideoFileSourceImpl*)impl.get())->fps(); }
 
 } // namespace videostab
 } // namespace cv

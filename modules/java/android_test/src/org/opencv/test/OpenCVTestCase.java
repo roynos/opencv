@@ -2,11 +2,9 @@ package org.opencv.test;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
-import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
 import java.util.List;
@@ -21,9 +19,9 @@ import org.opencv.core.Point3;
 import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
-import org.opencv.features2d.DMatch;
-import org.opencv.features2d.KeyPoint;
-import org.opencv.highgui.Highgui;
+import org.opencv.core.DMatch;
+import org.opencv.core.KeyPoint;
+import org.opencv.imgcodecs.Imgcodecs;
 
 import android.util.Log;
 
@@ -136,8 +134,8 @@ public class OpenCVTestCase extends TestCase {
         rgba0 = new Mat(matSize, matSize, CvType.CV_8UC4, Scalar.all(0));
         rgba128 = new Mat(matSize, matSize, CvType.CV_8UC4, Scalar.all(128));
 
-        rgbLena = Highgui.imread(OpenCVTestRunner.LENA_PATH);
-        grayChess = Highgui.imread(OpenCVTestRunner.CHESS_PATH, 0);
+        rgbLena = Imgcodecs.imread(OpenCVTestRunner.LENA_PATH);
+        grayChess = Imgcodecs.imread(OpenCVTestRunner.CHESS_PATH, 0);
 
         v1 = new Mat(1, 3, CvType.CV_32F);
         v1.put(0, 0, 1.0, 3.0, 2.0);

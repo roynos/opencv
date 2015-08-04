@@ -3,6 +3,7 @@ package org.opencv.android;
 import java.io.File;
 import java.util.StringTokenizer;
 
+import org.opencv.core.Core;
 import org.opencv.engine.OpenCVEngineInterface;
 
 import android.content.ComponentName;
@@ -20,8 +21,9 @@ class AsyncServiceHelper
             final LoaderCallbackInterface Callback)
     {
         AsyncServiceHelper helper = new AsyncServiceHelper(Version, AppContext, Callback);
-        if (AppContext.bindService(new Intent("org.opencv.engine.BIND"),
-                helper.mServiceConnection, Context.BIND_AUTO_CREATE))
+        Intent intent = new Intent("org.opencv.engine.BIND");
+        intent.setPackage("org.opencv.engine");
+        if (AppContext.bindService(intent, helper.mServiceConnection, Context.BIND_AUTO_CREATE))
         {
             return true;
         }
@@ -85,7 +87,6 @@ class AsyncServiceHelper
                     {
                         mServiceInstallationProgress = true;
                         Log.d(TAG, "Package installation started");
-
                     }
                     else
                     {
@@ -299,6 +300,10 @@ class AsyncServiceHelper
                         if (initOpenCVLibs(path, libs))
                         {
                             Log.d(TAG, "First attempt to load libs is OK");
+                            String eol = System.getProperty("line.separator");
+                            for (String str : Core.getBuildInformation().split(eol))
+                                Log.i(TAG, str);
+
                             status = LoaderCallbackInterface.SUCCESS;
                         }
                         else
@@ -371,7 +376,7 @@ class AsyncServiceHelper
             else
             {
                 // If the dependencies list is not defined or empty.
-                String AbsLibraryPath = Path + File.separator + "libopencv_java.so";
+                String AbsLibraryPath = Path + File.separator + "libopencv_java3.so";
                 result &= loadLibrary(AbsLibraryPath);
             }
 

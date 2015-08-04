@@ -15,7 +15,7 @@ PERF_TEST_P( TestBilateralFilter, BilateralFilter,
              Combine(
                 Values( szVGA, sz1080p ), // image size
                 Values( 3, 5 ), // d
-                ValuesIn( Mat_Type::all() ) // image type
+                Mat_Type::all() // image type
              )
 )
 {
@@ -34,5 +34,5 @@ PERF_TEST_P( TestBilateralFilter, BilateralFilter,
 
     TEST_CYCLE() bilateralFilter(src, dst, d, sigmaColor, sigmaSpace, BORDER_DEFAULT);
 
-    SANITY_CHECK(dst);
+    SANITY_CHECK(dst, .01, ERROR_RELATIVE);
 }

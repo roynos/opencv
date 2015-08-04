@@ -4,6 +4,7 @@
  * @author OpenCV team
  */
 
+#include "opencv2/imgcodecs.hpp"
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include <iostream>
@@ -30,12 +31,12 @@ int main( int, char** argv )
   src = imread( argv[1], 1 );
 
   /// Convert image to gray and blur it
-  cvtColor( src, src_gray, CV_BGR2GRAY );
+  cvtColor( src, src_gray, COLOR_BGR2GRAY );
   blur( src_gray, src_gray, Size(3,3) );
 
   /// Create Window
   const char* source_window = "Source";
-  namedWindow( source_window, CV_WINDOW_AUTOSIZE );
+  namedWindow( source_window, WINDOW_AUTOSIZE );
   imshow( source_window, src );
 
   createTrackbar( " Canny thresh:", "Source", &thresh, max_thresh, thresh_callback );
@@ -57,7 +58,7 @@ void thresh_callback(int, void* )
   /// Detect edges using canny
   Canny( src_gray, canny_output, thresh, thresh*2, 3 );
   /// Find contours
-  findContours( canny_output, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0) );
+  findContours( canny_output, contours, hierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE, Point(0, 0) );
 
   /// Get the moments
   vector<Moments> mu(contours.size() );
@@ -79,7 +80,7 @@ void thresh_callback(int, void* )
      }
 
   /// Show in a window
-  namedWindow( "Contours", CV_WINDOW_AUTOSIZE );
+  namedWindow( "Contours", WINDOW_AUTOSIZE );
   imshow( "Contours", drawing );
 
   /// Calculate the area with the moments 00 and compare with the result of the OpenCV function
@@ -92,4 +93,3 @@ void thresh_callback(int, void* )
        circle( drawing, mc[i], 4, color, -1, 8, 0 );
      }
 }
-

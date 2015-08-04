@@ -5,6 +5,7 @@
  */
 
 #include "opencv2/imgproc/imgproc.hpp"
+#include "opencv2/imgcodecs.hpp"
 #include "opencv2/highgui/highgui.hpp"
 #include <stdlib.h>
 #include <stdio.h>
@@ -27,16 +28,16 @@ int main( int, char** argv )
   /// Load an image
   src = imread( argv[1] );
 
-  if( !src.data )
+  if( src.empty() )
     { return -1; }
 
   GaussianBlur( src, src, Size(3,3), 0, 0, BORDER_DEFAULT );
 
   /// Convert it to gray
-  cvtColor( src, src_gray, CV_RGB2GRAY );
+  cvtColor( src, src_gray, COLOR_RGB2GRAY );
 
   /// Create window
-  namedWindow( window_name, CV_WINDOW_AUTOSIZE );
+  namedWindow( window_name, WINDOW_AUTOSIZE );
 
   /// Generate grad_x and grad_y
   Mat grad_x, grad_y;
@@ -61,5 +62,3 @@ int main( int, char** argv )
 
   return 0;
 }
-
-

@@ -14,6 +14,9 @@ int main()
     #define NOMINMAX 1
     #include <windows.h>
 #endif
+#if defined(_WIN64)
+    #include <windows.h>
+#endif
 
 #if defined(__APPLE__)
     #include <OpenGL/gl.h>
@@ -24,68 +27,50 @@ int main()
 #endif
 
 #include "opencv2/core/core.hpp"
-#include "opencv2/core/opengl_interop.hpp"
-#include "opencv2/core/gpumat.hpp"
+#include "opencv2/core/opengl.hpp"
+#include "opencv2/core/cuda.hpp"
 #include "opencv2/highgui/highgui.hpp"
 
 using namespace std;
 using namespace cv;
-using namespace cv::gpu;
+using namespace cv::cuda;
 
 const int win_width = 800;
 const int win_height = 640;
 
 struct DrawData
 {
-    GlArrays arr;
-    GlTexture2D tex;
-    GlBuffer indices;
+    ogl::Arrays arr;
+    ogl::Texture2D tex;
+    ogl::Buffer indices;
 };
 
-void CV_CDECL draw(void* userdata);
+void draw(void* userdata);
 
-void CV_CDECL draw(void* userdata)
+void draw(void* userdata)
 {
-    static double angle = 0.0;
-
     DrawData* data = static_cast<DrawData*>(userdata);
 
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    gluPerspective(45.0, (double)win_width / win_height, 0.1, 100.0);
+    glRotated(0.6, 0, 1, 0);
 
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-    gluLookAt(0, 0, 3, 0, 0, 0, 0, 1, 0);
-    glRotated(angle, 0, 1, 0);
-
-    glEnable(GL_TEXTURE_2D);
-    data->tex.bind();
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexEnvi(GL_TEXTURE_2D, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-
-    glDisable(GL_CULL_FACE);
-
-    render(data->arr, data->indices, RenderMode::TRIANGLES);
-
-    angle += 0.3;
+    ogl::render(data->arr, data->indices, ogl::TRIANGLES);
 }
 
 int main(int argc, char* argv[])
 {
+    string filename;
     if (argc < 2)
     {
         cout << "Usage: " << argv[0] << " image" << endl;
-        return -1;
+        filename = "../data/lena.jpg";
     }
+    else
+        filename = argv[1];
 
-    Mat img = imread(argv[1]);
+    Mat img = imread(filename);
     if (img.empty())
     {
-        cerr << "Can't open image " << argv[1] << endl;
+        cerr << "Can't open image " << filename << endl;
         return -1;
     }
 
@@ -108,12 +93,28 @@ int main(int argc, char* argv[])
     data.indices.copyFrom(indices);
     data.tex.copyFrom(img);
 
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluPerspective(45.0, (double)win_width / win_height, 0.1, 100.0);
+
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    gluLookAt(0, 0, 3, 0, 0, 0, 0, 1, 0);
+
+    glEnable(GL_TEXTURE_2D);
+    data.tex.bind();
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexEnvi(GL_TEXTURE_2D, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+
+    glDisable(GL_CULL_FACE);
+
     setOpenGlDrawCallback("OpenGL", draw, &data);
 
     for (;;)
     {
         updateWindow("OpenGL");
-        int key = waitKey(10);
+        int key = waitKey(40);
         if ((key & 0xff) == 27)
             break;
     }

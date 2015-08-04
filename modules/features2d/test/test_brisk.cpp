@@ -42,6 +42,7 @@
 
 #include "test_precomp.hpp"
 
+using namespace std;
 using namespace cv;
 
 class CV_BRISKTest : public cvtest::BaseTest
@@ -68,10 +69,10 @@ void CV_BRISKTest::run( int )
     }
 
   Mat gray1, gray2;
-  cvtColor(image1, gray1, CV_BGR2GRAY);
-  cvtColor(image2, gray2, CV_BGR2GRAY);
+  cvtColor(image1, gray1, COLOR_BGR2GRAY);
+  cvtColor(image2, gray2, COLOR_BGR2GRAY);
 
-  Ptr<FeatureDetector> detector = Algorithm::create<FeatureDetector>("Feature2D.BRISK");
+  Ptr<FeatureDetector> detector = BRISK::create();
 
   vector<KeyPoint> keypoints1;
   vector<KeyPoint> keypoints2;
@@ -92,4 +93,3 @@ void CV_BRISKTest::run( int )
 }
 
 TEST(Features2d_BRISK, regression) { CV_BRISKTest test; test.safe_run(); }
-

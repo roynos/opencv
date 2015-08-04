@@ -5,8 +5,6 @@
 #include "polynom_solver.h"
 #include "p3p.h"
 
-using namespace std;
-
 void p3p::init_inverse_parameters()
 {
     inv_fx = 1. / fx;
@@ -413,4 +411,3 @@ bool p3p::jacobi_4x4(double * A, double * D, double * U)
 
     return false;
 }
-

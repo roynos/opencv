@@ -54,6 +54,8 @@
     #undef min
     #undef max
     #undef abs
+#else
+    #include <pthread.h>
 #endif
 
 #if defined __SSE2__ || (defined _M_IX86_FP && 2 == _M_IX86_FP)
@@ -509,8 +511,8 @@ void RNG::fill( InputOutputArray _mat, int disttype,
     {
         _parambuf.allocate(cn*8 + n1 + n2);
         double* parambuf = _parambuf;
-        double* p1 = (double*)_param1.data;
-        double* p2 = (double*)_param2.data;
+        double* p1 = _param1.ptr<double>();
+        double* p2 = _param2.ptr<double>();
 
         if( !_param1.isContinuous() || _param1.type() != CV_64F || n1 != cn )
         {
@@ -537,13 +539,13 @@ void RNG::fill( InputOutputArray _mat, int disttype,
             ip = (Vec2i*)(parambuf + cn*2);
             for( j = 0, fast_int_mode = 1; j < cn; j++ )
             {
-                double a = min(p1[j], p2[j]);
-                double b = max(p1[j], p2[j]);
+                double a = std::min(p1[j], p2[j]);
+                double b = std::max(p1[j], p2[j]);
                 if( saturateRange )
                 {
-                    a = max(a, depth == CV_8U || depth == CV_16U ? 0. :
+                    a = std::max(a, depth == CV_8U || depth == CV_16U ? 0. :
                             depth == CV_8S ? -128. : depth == CV_16S ? -32768. : (double)INT_MIN);
-                    b = min(b, depth == CV_8U ? 256. : depth == CV_16U ? 65536. :
+                    b = std::min(b, depth == CV_8U ? 256. : depth == CV_16U ? 65536. :
                             depth == CV_8S ? 128. : depth == CV_16S ? 32768. : (double)INT_MAX);
                 }
                 ip[j][1] = cvCeil(a);
@@ -573,8 +575,8 @@ void RNG::fill( InputOutputArray _mat, int disttype,
                     while(((uint64)1 << l) < d)
                         l++;
                     ds[j].M = (unsigned)(((uint64)1 << 32)*(((uint64)1 << l) - d)/d) + 1;
-                    ds[j].sh1 = min(l, 1);
-                    ds[j].sh2 = max(l - 1, 0);
+                    ds[j].sh1 = std::min(l, 1);
+                    ds[j].sh2 = std::max(l - 1, 0);
                 }
             }
 
@@ -623,7 +625,7 @@ void RNG::fill( InputOutputArray _mat, int disttype,
         int esz = (int)CV_ELEM_SIZE(ptype);
 
         if( _param1.isContinuous() && _param1.type() == ptype )
-            mean = _param1.data;
+            mean = _param1.ptr();
         else
         {
             Mat tmp(_param1.size(), ptype, parambuf);
@@ -636,7 +638,7 @@ void RNG::fill( InputOutputArray _mat, int disttype,
                 mean[j] = mean[j - n1*esz];
 
         if( _param2.isContinuous() && _param2.type() == ptype )
-            stddev = _param2.data;
+            stddev = _param2.ptr();
         else
         {
             Mat tmp(_param2.size(), ptype, parambuf + cn);
@@ -725,64 +727,11 @@ void RNG::fill( InputOutputArray _mat, int disttype,
     }
 }
 
-#ifdef WIN32
-#ifdef WINCE
-#	define TLS_OUT_OF_INDEXES ((DWORD)0xFFFFFFFF)
-#endif
-static DWORD tlsRNGKey = TLS_OUT_OF_INDEXES;
-
-void deleteThreadRNGData()
-{
-    if( tlsRNGKey != TLS_OUT_OF_INDEXES )
-        delete (RNG*)TlsGetValue( tlsRNGKey );
 }
 
-RNG& theRNG()
+cv::RNG& cv::theRNG()
 {
-    if( tlsRNGKey == TLS_OUT_OF_INDEXES )
-    {
-        tlsRNGKey = TlsAlloc();
-        CV_Assert(tlsRNGKey != TLS_OUT_OF_INDEXES);
-    }
-    RNG* rng = (RNG*)TlsGetValue( tlsRNGKey );
-    if( !rng )
-    {
-        rng = new RNG;
-        TlsSetValue( tlsRNGKey, rng );
-    }
-    return *rng;
-}
-
-#else
-
-static pthread_key_t tlsRNGKey = 0;
-static pthread_once_t tlsRNGKeyOnce = PTHREAD_ONCE_INIT;
-
-static void deleteRNG(void* data)
-{
-    delete (RNG*)data;
-}
-
-static void makeRNGKey()
-{
-    int errcode = pthread_key_create(&tlsRNGKey, deleteRNG);
-    CV_Assert(errcode == 0);
-}
-
-RNG& theRNG()
-{
-    pthread_once(&tlsRNGKeyOnce, makeRNGKey);
-    RNG* rng = (RNG*)pthread_getspecific(tlsRNGKey);
-    if( !rng )
-    {
-        rng = new RNG;
-        pthread_setspecific(tlsRNGKey, rng);
-    }
-    return *rng;
-}
-
-#endif
-
+    return getCoreTlsData().get()->rng;
 }
 
 void cv::randu(InputOutputArray dst, InputArray low, InputArray high)
@@ -799,29 +748,35 @@ namespace cv
 {
 
 template<typename T> static void
-randShuffle_( Mat& _arr, RNG& rng, double iterFactor )
+randShuffle_( Mat& _arr, RNG& rng, double )
 {
-    int sz = _arr.rows*_arr.cols, iters = cvRound(iterFactor*sz);
+    unsigned sz = (unsigned)_arr.total();
     if( _arr.isContinuous() )
     {
-        T* arr = (T*)_arr.data;
-        for( int i = 0; i < iters; i++ )
+        T* arr = _arr.ptr<T>();
+        for( unsigned i = 0; i < sz; i++ )
         {
-            int j = (unsigned)rng % sz, k = (unsigned)rng % sz;
-            std::swap( arr[j], arr[k] );
+            unsigned j = (unsigned)rng % sz;
+            std::swap( arr[j], arr[i] );
         }
     }
     else
     {
-        uchar* data = _arr.data;
+        CV_Assert( _arr.dims <= 2 );
+        uchar* data = _arr.ptr();
         size_t step = _arr.step;
+        int rows = _arr.rows;
         int cols = _arr.cols;
-        for( int i = 0; i < iters; i++ )
+        for( int i0 = 0; i0 < rows; i0++ )
         {
-            int j1 = (unsigned)rng % sz, k1 = (unsigned)rng % sz;
-            int j0 = j1/cols, k0 = k1/cols;
-            j1 -= j0*cols; k1 -= k0*cols;
-            std::swap( ((T*)(data + step*j0))[j1], ((T*)(data + step*k0))[k1] );
+            T* p = _arr.ptr<T>(i0);
+            for( int j0 = 0; j0 < cols; j0++ )
+            {
+                unsigned k1 = (unsigned)rng % sz;
+                int i1 = (int)(k1 / cols);
+                int j1 = (int)(k1 - (unsigned)i1*(unsigned)cols);
+                std::swap( p[j0], ((T*)(data + step*i1))[j1] );
+            }
         }
     }
 }
@@ -861,11 +816,6 @@ void cv::randShuffle( InputOutputArray _dst, double iterFactor, RNG* _rng )
     func( dst, rng, iterFactor );
 }
 
-void cv::randShuffle_( InputOutputArray _dst, double iterFactor )
-{
-    randShuffle(_dst, iterFactor);
-}
-
 CV_IMPL void
 cvRandArr( CvRNG* _rng, CvArr* arr, int disttype, CvScalar param1, CvScalar param2 )
 {
@@ -882,5 +832,130 @@ CV_IMPL void cvRandShuffle( CvArr* arr, CvRNG* _rng, double iter_factor )
     cv::RNG& rng = _rng ? (cv::RNG&)*_rng : cv::theRNG();
     cv::randShuffle( dst, iter_factor, &rng );
 }
+
+// Mersenne Twister random number generator.
+// Inspired by http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/MT2002/CODES/mt19937ar.c
+
+/*
+   A C-program for MT19937, with initialization improved 2002/1/26.
+   Coded by Takuji Nishimura and Makoto Matsumoto.
+
+   Before using, initialize the state by using init_genrand(seed)
+   or init_by_array(init_key, key_length).
+
+   Copyright (C) 1997 - 2002, Makoto Matsumoto and Takuji Nishimura,
+   All rights reserved.
+
+   Redistribution and use in source and binary forms, with or without
+   modification, are permitted provided that the following conditions
+   are met:
+
+     1. Redistributions of source code must retain the above copyright
+        notice, this list of conditions and the following disclaimer.
+
+     2. Redistributions in binary form must reproduce the above copyright
+        notice, this list of conditions and the following disclaimer in the
+        documentation and/or other materials provided with the distribution.
+
+     3. The names of its contributors may not be used to endorse or promote
+        products derived from this software without specific prior written
+        permission.
+
+   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+   "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+   LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+   A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+   CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+   EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+   PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+   PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+   LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+   NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+   SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+   Any feedback is very welcome.
+   http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/emt.html
+   email: m-mat @ math.sci.hiroshima-u.ac.jp (remove space)
+*/
+
+cv::RNG_MT19937::RNG_MT19937(unsigned s) { seed(s); }
+
+cv::RNG_MT19937::RNG_MT19937() { seed(5489U); }
+
+void cv::RNG_MT19937::seed(unsigned s)
+{
+    state[0]= s;
+    for (mti = 1; mti < N; mti++)
+    {
+        /* See Knuth TAOCP Vol2. 3rd Ed. P.106 for multiplier. */
+        state[mti] = (1812433253U * (state[mti - 1] ^ (state[mti - 1] >> 30)) + mti);
+    }
+}
+
+unsigned cv::RNG_MT19937::next()
+{
+    /* mag01[x] = x * MATRIX_A  for x=0,1 */
+    static unsigned mag01[2] = { 0x0U, /*MATRIX_A*/ 0x9908b0dfU};
+
+    const unsigned UPPER_MASK = 0x80000000U;
+    const unsigned LOWER_MASK = 0x7fffffffU;
+
+    /* generate N words at one time */
+    if (mti >= N)
+    {
+        int kk = 0;
+
+        for (; kk < N - M; ++kk)
+        {
+            unsigned y = (state[kk] & UPPER_MASK) | (state[kk + 1] & LOWER_MASK);
+            state[kk] = state[kk + M] ^ (y >> 1) ^ mag01[y & 0x1U];
+        }
+
+        for (; kk < N - 1; ++kk)
+        {
+            unsigned y = (state[kk] & UPPER_MASK) | (state[kk + 1] & LOWER_MASK);
+            state[kk] = state[kk + (M - N)] ^ (y >> 1) ^ mag01[y & 0x1U];
+        }
+
+        unsigned y = (state[N - 1] & UPPER_MASK) | (state[0] & LOWER_MASK);
+        state[N - 1] = state[M - 1] ^ (y >> 1) ^ mag01[y & 0x1U];
+
+        mti = 0;
+    }
+
+    unsigned y = state[mti++];
+
+    /* Tempering */
+    y ^= (y >> 11);
+    y ^= (y <<  7) & 0x9d2c5680U;
+    y ^= (y << 15) & 0xefc60000U;
+    y ^= (y >> 18);
+
+    return y;
+}
+
+cv::RNG_MT19937::operator unsigned() { return next(); }
+
+cv::RNG_MT19937::operator int() { return (int)next();}
+
+cv::RNG_MT19937::operator float() { return next() * (1.f / 4294967296.f); }
+
+cv::RNG_MT19937::operator double()
+{
+    unsigned a = next() >> 5;
+    unsigned b = next() >> 6;
+    return (a * 67108864.0 + b) * (1.0 / 9007199254740992.0);
+}
+
+int cv::RNG_MT19937::uniform(int a, int b) { return (int)(next() % (b - a) + a); }
+
+float cv::RNG_MT19937::uniform(float a, float b) { return ((float)*this)*(b - a) + a; }
+
+double cv::RNG_MT19937::uniform(double a, double b) { return ((double)*this)*(b - a) + a; }
+
+unsigned cv::RNG_MT19937::operator ()(unsigned b) { return next() % b; }
+
+unsigned cv::RNG_MT19937::operator ()() { return next(); }
 
 /* End of file. */

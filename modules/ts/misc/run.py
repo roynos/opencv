@@ -7,6 +7,8 @@ from subprocess import Popen, PIPE
 hostos = os.name # 'nt', 'posix'
 hostmachine = platform.machine() # 'x86', 'AMD64', 'x86_64'
 
+errorCode = 0
+
 SIMD_DETECTION_PROGRAM="""
 #if __SSE5__
 # error SSE5
@@ -69,6 +71,8 @@ parse_patterns = (
   {'name': "ndk_path",                 'default': None,       'pattern': re.compile("^(?:ANDROID_NDK|ANDROID_STANDALONE_TOOLCHAIN)?:PATH=(.*)$")},
   {'name': "android_abi",              'default': None,       'pattern': re.compile("^ANDROID_ABI:STRING=(.*)$")},
   {'name': "android_executable",       'default': None,       'pattern': re.compile("^ANDROID_EXECUTABLE:FILEPATH=(.*android.*)$")},
+  {'name': "ant_executable",           'default': None,       'pattern': re.compile("^ANT_EXECUTABLE:FILEPATH=(.*ant.*)$")},
+  {'name': "java_test_binary_dir",     'default': None,       'pattern': re.compile("^opencv_test_java_BINARY_DIR:STATIC=(.*)$")},
   {'name': "is_x64",                   'default': "OFF",      'pattern': re.compile("^CUDA_64_BIT_DEVICE_CODE:BOOL=(ON)$")},#ugly(
   {'name': "cmake_generator",          'default': None,       'pattern': re.compile("^CMAKE_GENERATOR:INTERNAL=(.+)$")},
   {'name': "cxx_compiler",             'default': None,       'pattern': re.compile("^CMAKE_CXX_COMPILER:FILEPATH=(.+)$")},
@@ -286,6 +290,16 @@ class TestSuite(object):
             if self.adb:
                 # construct name for aapt tool
                 self.aapt = [os.path.join(os.path.dirname(self.adb[0]), ("aapt","aapt.exe")[hostos == 'nt'])]
+                if not os.path.isfile(self.aapt[0]):
+                    # it's moved in SDK r22
+                    sdk_dir = os.path.dirname( os.path.dirname(self.adb[0]) )
+                    aapt_fn = ("aapt", "aapt.exe")[hostos == 'nt']
+                    for r, ds, fs in os.walk( os.path.join(sdk_dir, 'build-tools') ):
+                        if aapt_fn in fs:
+                            self.aapt = [ os.path.join(r, aapt_fn) ]
+                            break
+                    else:
+                        self.error = "Can't find '%s' tool!" % aapt_fn
 
         # fix has_perf_tests param
         self.has_perf_tests = self.has_perf_tests == "ON"
@@ -431,6 +445,8 @@ class TestSuite(object):
         if self.tests_dir and os.path.isdir(self.tests_dir):
             files = glob.glob(os.path.join(self.tests_dir, self.nameprefix + "*"))
             files = [f for f in files if self.isTest(f)]
+            if self.ant_executable and self.java_test_binary_dir:
+                files.append("java")
             return files
         return []
 
@@ -546,7 +562,10 @@ class TestSuite(object):
             else:
                 hw = ""
             tstamp = timestamp.strftime("%Y%m%d-%H%M%S")
-            return "%s_%s_%s_%s%s%s.xml" % (app, self.targetos, self.targetarch, hw, rev, tstamp)
+            lname = "%s_%s_%s_%s%s%s.xml" % (app, self.targetos, self.targetarch, hw, rev, tstamp)
+            lname = str.replace(lname, '(', '_')
+            lname = str.replace(lname, ')', '_')
+            return lname
 
     def getTest(self, name):
         # full path
@@ -627,6 +646,8 @@ class TestSuite(object):
         return True
 
     def runTest(self, path, workingDir, _stdout, _stderr, args = []):
+        global errorCode
+
         if self.error:
             return
         args = args[:]
@@ -719,7 +740,15 @@ class TestSuite(object):
                 print >> _stderr, "Run command:", command
                 if self.setUp:
                     self.setUp()
-                Popen(self.adb + ["shell", "export OPENCV_TEST_DATA_PATH=" + self.options.test_data_path + "&& cd " + andoidcwd + "&& ./" + command], stdout=_stdout, stderr=_stderr).wait()
+                env = self.options.android_env.copy()
+                env['OPENCV_TEST_DATA_PATH'] = self.options.test_data_path
+                if self.options.android_propagate_opencv_env:
+                    for k, v in os.environ.items():
+                        if k.startswith('OPENCV') and not k in env:
+                            env[k] = v
+                print >> _stderr, "Android environment variables: \n", '\n'.join(['    %s=%s' % (k, v) for k, v in env.items()])
+                commandPrefix = ''.join(['export %s=%s && ' % (k, v) for k, v in env.items()])
+                Popen(self.adb + ["shell", commandPrefix + "cd " + andoidcwd + "&& ./" + command], stdout=_stdout, stderr=_stderr).wait()
                 if self.tearDown:
                     self.tearDown()
                 # try get log
@@ -740,6 +769,19 @@ class TestSuite(object):
             if os.path.isfile(hostlogpath):
                 return hostlogpath
             return None
+        elif path == "java":
+            cmd = [self.ant_executable,
+                   "-Dopencv.build.type="
+                     + (self.options.configuration if self.options.configuration else self.build_type),
+                   "buildAndTest"]
+
+            print >> _stderr, "Run command:", " ".join(cmd)
+            try:
+                errorCode = Popen(cmd, stdout=_stdout, stderr=_stderr, cwd = self.java_test_binary_dir + "/.build").wait()
+            except:
+                print "Unexpected error:", sys.exc_info()[0]
+
+            return None
         else:
             cmd = [exe]
             if self.options.help:
@@ -753,9 +795,9 @@ class TestSuite(object):
 
             print >> _stderr, "Run command:", " ".join(cmd)
             try:
-                Popen(cmd, stdout=_stdout, stderr=_stderr, cwd = workingDir).wait()
-            except OSError:
-                pass
+                errorCode = Popen(cmd, stdout=_stdout, stderr=_stderr, cwd = workingDir).wait()
+            except:
+                print "Unexpected error:", sys.exc_info()[0]
 
             # clean temporary files
             if orig_temp_path:
@@ -808,16 +850,57 @@ def getRunArgs(args):
             path = npath
     return run_args
 
+if hostos == "nt":
+    def moveTests(instance, destination):
+        src = os.path.dirname(instance.tests_dir)
+        # new binaries path
+        newBinPath = os.path.join(destination, "bin")
+
+        try:
+            # copy binaries and CMakeCache.txt to the specified destination
+            shutil.copytree(src, newBinPath)
+            shutil.copy(os.path.join(instance.path, "CMakeCache.txt"), os.path.join(destination, "CMakeCache.txt"))
+        except Exception, e:
+            print "Copying error occurred:", str(e)
+            exit(e.errno)
+
+        # pattern of CMakeCache.txt string to be replaced
+        replacePattern = re.compile("EXECUTABLE_OUTPUT_PATH:PATH=(.+)")
+
+        with open(os.path.join(destination, "CMakeCache.txt"), "r") as cachefile:
+            try:
+                cachedata = cachefile.read()
+                if hostos == 'nt':
+                    # fix path slashes on nt systems
+                    newBinPath = re.sub(r"\\", r"/", newBinPath)
+                # replace old binaries path in CMakeCache.txt
+                cachedata = re.sub(re.search(replacePattern, cachedata).group(1), newBinPath, cachedata)
+            except Exception, e:
+                print "Reading error occurred:", str(e)
+                exit(e.errno)
+
+        with open(os.path.join(destination, "CMakeCache.txt"), "w") as cachefile:
+            try:
+                cachefile.write(cachedata)
+            except Exception, e:
+                print "Writing error occurred:", str(e)
+                exit(e.errno)
+        exit()
+
 if __name__ == "__main__":
     test_args = [a for a in sys.argv if a.startswith("--perf_") or a.startswith("--gtest_")]
     argv =      [a for a in sys.argv if not(a.startswith("--perf_") or a.startswith("--gtest_"))]
 
-    parser = OptionParser()
+    parser = OptionParser(usage="run.py [options] [build_path]", description="Note: build_path is required if running not from CMake build directory")
     parser.add_option("-t", "--tests", dest="tests", help="comma-separated list of modules to test", metavar="SUITS", default="")
+    if hostos == "nt":
+        parser.add_option("-m", "--move_tests", dest="move", help="location to move current tests build", metavar="PATH", default="")
     parser.add_option("-w", "--cwd", dest="cwd", help="working directory for tests", metavar="PATH", default=".")
     parser.add_option("-a", "--accuracy", dest="accuracy", help="look for accuracy tests instead of performance tests", action="store_true", default=False)
     parser.add_option("-l", "--longname", dest="useLongNames", action="store_true", help="generate log files with long names", default=False)
     parser.add_option("", "--android_test_data_path", dest="test_data_path", help="OPENCV_TEST_DATA_PATH for Android run", metavar="PATH", default="/sdcard/opencv_testdata/")
+    parser.add_option("", "--android_env", dest="android_env_array", help="Environment variable for Android run (NAME=VALUE)", action='append')
+    parser.add_option("", "--android_propagate_opencv_env", dest="android_propagate_opencv_env", help="Propagate OPENCV* environment variables for Android run", action="store_true", default=False)
     parser.add_option("", "--configuration", dest="configuration", help="force Debug or Release configuration", metavar="CFG", default="")
     parser.add_option("", "--serial", dest="adb_serial", help="Android: directs command to the USB device or emulator with the given serial number", metavar="serial number", default="")
     parser.add_option("", "--package", dest="junit_package", help="Android: run jUnit tests for specified package", metavar="package", default="")
@@ -836,7 +919,14 @@ if __name__ == "__main__":
 
     if len(run_args) == 0:
         print >> sys.stderr, "Usage:", os.path.basename(sys.argv[0]), "[options] [build_path]"
+        print >> sys.stderr, "Please specify build_path or run script from CMake build directory"
         exit(1)
+
+    options.android_env = {}
+    if options.android_env_array:
+        for entry in options.android_env_array:
+            k, v = entry.split("=", 1)
+            options.android_env[k] = v
 
     tests = [s.strip() for s in options.tests.split(",") if s]
 
@@ -856,6 +946,10 @@ if __name__ == "__main__":
     test_list = []
     for path in run_args:
         suite = TestSuite(options, path)
+
+        if hostos == "nt":
+            if(options.move):
+                moveTests(suite, options.move)
         #print vars(suite),"\n"
         if options.list:
             test_list.extend(suite.tests)
@@ -867,3 +961,7 @@ if __name__ == "__main__":
 
     if logs:
         print >> sys.stderr, "Collected:  ", " ".join(logs)
+
+    if errorCode != 0:
+        print "Error code: ", errorCode, (" (0x%x)" % (errorCode & 0xffffffff))
+    exit(errorCode)

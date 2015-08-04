@@ -1,27 +1,31 @@
 set(the_description "The Core Functionality")
-ocv_add_module(core ${ZLIB_LIBRARIES})
-ocv_module_include_directories(${ZLIB_INCLUDE_DIR})
+ocv_add_module(core
+               opencv_hal
+               PRIVATE_REQUIRED ${ZLIB_LIBRARIES} "${OPENCL_LIBRARIES}"
+               OPTIONAL opencv_cudev
+               WRAP java python)
 
-if(HAVE_CUDA)
-  ocv_source_group("Src\\Cuda" GLOB "src/cuda/*.cu")
-  ocv_include_directories("${OpenCV_SOURCE_DIR}/modules/gpu/include" ${CUDA_INCLUDE_DIRS})
-  ocv_warnings_disable(CMAKE_CXX_FLAGS -Wundef)
+set(extra_libs "")
 
-  file(GLOB lib_cuda "src/cuda/*.cu")
-  ocv_cuda_compile(cuda_objs ${lib_cuda})
-
-  set(cuda_link_libs ${CUDA_LIBRARIES} ${CUDA_npp_LIBRARY})
-else()
-  set(lib_cuda "")
-  set(cuda_objs "")
-  set(cuda_link_libs "")
+if(WINRT AND CMAKE_SYSTEM_NAME MATCHES WindowsStore AND CMAKE_SYSTEM_VERSION MATCHES "8.0")
+  list(APPEND extra_libs ole32.lib)
 endif()
 
-ocv_glob_module_sources(SOURCES ${lib_cuda} ${cuda_objs} "${opencv_core_BINARY_DIR}/version_string.inc")
+if(HAVE_CUDA)
+  ocv_warnings_disable(CMAKE_CXX_FLAGS -Wundef -Wenum-compare -Wunused-function -Wshadow)
+endif()
 
-ocv_create_module(${cuda_link_libs})
-ocv_add_precompiled_headers(${the_module})
+file(GLOB lib_cuda_hdrs        "include/opencv2/${name}/cuda/*.hpp"        "include/opencv2/${name}/cuda/*.h")
+file(GLOB lib_cuda_hdrs_detail "include/opencv2/${name}/cuda/detail/*.hpp" "include/opencv2/${name}/cuda/detail/*.h")
+
+source_group("Cuda Headers"         FILES ${lib_cuda_hdrs})
+source_group("Cuda Headers\\Detail" FILES ${lib_cuda_hdrs_detail})
+
+ocv_glob_module_sources(SOURCES "${OPENCV_MODULE_opencv_core_BINARY_DIR}/version_string.inc"
+                        HEADERS ${lib_cuda_hdrs} ${lib_cuda_hdrs_detail})
+
+ocv_module_include_directories(${the_module} ${ZLIB_INCLUDE_DIRS})
+ocv_create_module(${extra_libs})
 
 ocv_add_accuracy_tests()
 ocv_add_perf_tests()
-

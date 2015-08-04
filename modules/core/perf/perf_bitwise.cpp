@@ -19,7 +19,7 @@ PERF_TEST_P(Size_MatType, bitwise_not, TYPICAL_MATS_BITW_ARITHM)
     cv::Mat c = Mat(sz, type);
 
     declare.in(a, WARMUP_RNG).out(c);
-    declare.time(100);
+    declare.iterations(200);
 
     TEST_CYCLE() cv::bitwise_not(a, c);
 
@@ -73,4 +73,3 @@ PERF_TEST_P(Size_MatType, bitwise_xor, TYPICAL_MATS_BITW_ARITHM)
 
     SANITY_CHECK(c);
 }
-

@@ -47,8 +47,6 @@
 // for debug purposes
 #define SAVE_MOTIONS 0
 
-using namespace std;
-
 namespace cv
 {
 namespace videostab
@@ -56,11 +54,11 @@ namespace videostab
 
 StabilizerBase::StabilizerBase()
 {
-    setLog(new LogToStdout());
-    setFrameSource(new NullFrameSource());
-    setMotionEstimator(new KeypointBasedMotionEstimator(new MotionEstimatorRansacL2()));
-    setDeblurer(new NullDeblurer());
-    setInpainter(new NullInpainter());
+    setLog(makePtr<LogToStdout>());
+    setFrameSource(makePtr<NullFrameSource>());
+    setMotionEstimator(makePtr<KeypointBasedMotionEstimator>(makePtr<MotionEstimatorRansacL2>()));
+    setDeblurer(makePtr<NullDeblurer>());
+    setInpainter(makePtr<NullInpainter>());
     setRadius(15);
     setTrimRatio(0);
     setCorrectionForInclusion(false);
@@ -158,7 +156,7 @@ bool StabilizerBase::doOneIteration()
 
 void StabilizerBase::setUp(const Mat &firstFrame)
 {
-    InpainterBase *inpaint = static_cast<InpainterBase*>(inpainter_);
+    InpainterBase *inpaint = inpainter_.get();
     doInpainting_ = dynamic_cast<NullInpainter*>(inpaint) == 0;
     if (doInpainting_)
     {
@@ -169,7 +167,7 @@ void StabilizerBase::setUp(const Mat &firstFrame)
         inpainter_->setStabilizationMotions(stabilizationMotions_);
     }
 
-    DeblurerBase *deblurer = static_cast<DeblurerBase*>(deblurer_);
+    DeblurerBase *deblurer = deblurer_.get();
     doDeblurring_ = dynamic_cast<NullDeblurer*>(deblurer) == 0;
     if (doDeblurring_)
     {
@@ -254,7 +252,7 @@ void StabilizerBase::logProcessingTime()
 
 OnePassStabilizer::OnePassStabilizer()
 {
-    setMotionFilter(new GaussianMotionFilter());
+    setMotionFilter(makePtr<GaussianMotionFilter>());
     reset();
 }
 
@@ -298,7 +296,7 @@ Mat OnePassStabilizer::estimateMotion()
 
 Mat OnePassStabilizer::estimateStabilizationMotion()
 {
-    return motionFilter_->stabilize(curStabilizedPos_, motions_, make_pair(0, curPos_));
+    return motionFilter_->stabilize(curStabilizedPos_, motions_, std::make_pair(0, curPos_));
 }
 
 
@@ -310,8 +308,8 @@ Mat OnePassStabilizer::postProcessFrame(const Mat &frame)
 
 TwoPassStabilizer::TwoPassStabilizer()
 {
-    setMotionStabilizer(new GaussianMotionFilter());
-    setWobbleSuppressor(new NullWobbleSuppressor());
+    setMotionStabilizer(makePtr<GaussianMotionFilter>());
+    setWobbleSuppressor(makePtr<NullWobbleSuppressor>());
     setEstimateTrimRatio(false);
     reset();
 }
@@ -337,31 +335,31 @@ Mat TwoPassStabilizer::nextFrame()
 
 #if SAVE_MOTIONS
 static void saveMotions(
-        int frameCount, const vector<Mat> &motions, const vector<Mat> &stabilizationMotions)
+        int frameCount, const std::vector<Mat> &motions, const std::vector<Mat> &stabilizationMotions)
 {
-    ofstream fm("log_motions.csv");
+    std::ofstream fm("log_motions.csv");
     for (int i = 0; i < frameCount - 1; ++i)
     {
         Mat_<float> M = at(i, motions);
         fm << M(0,0) << " " << M(0,1) << " " << M(0,2) << " "
            << M(1,0) << " " << M(1,1) << " " << M(1,2) << " "
-           << M(2,0) << " " << M(2,1) << " " << M(2,2) << endl;
+           << M(2,0) << " " << M(2,1) << " " << M(2,2) << std::endl;
     }
-    ofstream fo("log_orig.csv");
+    std::ofstream fo("log_orig.csv");
     for (int i = 0; i < frameCount; ++i)
     {
         Mat_<float> M = getMotion(0, i, motions);
         fo << M(0,0) << " " << M(0,1) << " " << M(0,2) << " "
            << M(1,0) << " " << M(1,1) << " " << M(1,2) << " "
-           << M(2,0) << " " << M(2,1) << " " << M(2,2) << endl;
+           << M(2,0) << " " << M(2,1) << " " << M(2,2) << std::endl;
     }
-    ofstream fs("log_stab.csv");
+    std::ofstream fs("log_stab.csv");
     for (int i = 0; i < frameCount; ++i)
     {
         Mat_<float> M = stabilizationMotions[i] * getMotion(0, i, motions);
         fs << M(0,0) << " " << M(0,1) << " " << M(0,2) << " "
            << M(1,0) << " " << M(1,1) << " " << M(1,2) << " "
-           << M(2,0) << " " << M(2,1) << " " << M(2,2) << endl;
+           << M(2,0) << " " << M(2,1) << " " << M(2,2) << std::endl;
     }
 }
 #endif
@@ -373,7 +371,7 @@ void TwoPassStabilizer::runPrePassIfNecessary()
     {
         // check if we must do wobble suppression
 
-        WobbleSuppressorBase *wobble = static_cast<WobbleSuppressorBase*>(wobbleSuppressor_);
+        WobbleSuppressorBase *wobble = wobbleSuppressor_.get();
         doWobbleSuppression_ = dynamic_cast<NullWobbleSuppressor*>(wobble) == 0;
 
         // estimate motions
@@ -432,7 +430,7 @@ void TwoPassStabilizer::runPrePassIfNecessary()
 
         stabilizationMotions_.resize(frameCount_);
         motionStabilizer_->stabilize(
-            frameCount_, motions_, make_pair(0, frameCount_ - 1), &stabilizationMotions_[0]);
+            frameCount_, motions_, std::make_pair(0, frameCount_ - 1), &stabilizationMotions_[0]);
 
         elapsedTime = clock() - startTime;
         log_->print("motion stabilization time: %.3f sec\n",
@@ -471,7 +469,7 @@ void TwoPassStabilizer::setUp(const Mat &firstFrame)
     for (int i = -radius_; i <= 0; ++i)
         at(i, frames_) = firstFrame;
 
-    WobbleSuppressorBase *wobble = static_cast<WobbleSuppressorBase*>(wobbleSuppressor_);
+    WobbleSuppressorBase *wobble = wobbleSuppressor_.get();
     doWobbleSuppression_ = dynamic_cast<NullWobbleSuppressor*>(wobble) == 0;
     if (doWobbleSuppression_)
     {

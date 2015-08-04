@@ -1,55 +1,84 @@
-.git*       export-ignore
+*           text=auto whitespace=trailing-space,space-before-tab,-indent-with-non-tab,tab-in-indent,tabwidth=4
 
-*           text=auto
-*           whitespace=!indent,trail,space
+.git*       text export-ignore
 
-*.py        text whitespace=tab-in-indent,trail,space,fix
-*.cpp       text whitespace=tab-in-indent,trail,space,fix
-*.hpp       text whitespace=tab-in-indent,trail,space,fix
-*.cxx       text whitespace=tab-in-indent,trail,space,fix
-*.hxx       text whitespace=tab-in-indent,trail,space,fix
-*.mm        text whitespace=tab-in-indent,trail,space,fix
-*.c         text whitespace=tab-in-indent,trail,space,fix
-*.h         text whitespace=tab-in-indent,trail,space,fix
-*.i         text whitespace=tab-in-indent,trail,space,fix
-*.java      text whitespace=tab-in-indent,trail,space,fix
-*.cu        text whitespace=tab-in-indent,trail,space,fix
-*.cl        text whitespace=tab-in-indent,trail,space,fix
+*.aidl         text
+*.appxmanifest text
+*.bib          text
+*.c            text
+*.cl           text
+*.conf         text
+*.cpp          text
+*.css_t        text
+*.cu           text
+*.cxx          text
+*.def          text
+*.filelist     text
+*.h            text
+*.hpp          text
+*.htm          text
+*.html         text
+*.hxx          text
+*.i            text
+*.idl          text
+*.java         text
+*.js           text
+*.m            text
+*.mk           text
+*.mm           text
+*.plist        text
+*.properties   text
+*.py           text
+*.qrc          text
+*.qss          text
+*.S            text
+*.sbt          text
+*.scala        text
+*.sty          text
+*.tex          text
+*.txt          text
+*.xaml         text
 
-*.cmake     text whitespace=tab-in-indent,trail,space,fix
-*.cmakein   text whitespace=tab-in-indent,trail,space,fix
-*.in        text whitespace=tab-in-indent,trail,space,fix
-CMakeLists.txt  text whitespace=tab-in-indent,trail,space,fix
+# reST underlines/overlines can look like conflict markers
+*.rst          text conflict-marker-size=80
 
-*.rst       text whitespace=tab-in-indent,trail,space,fix
+*.cmake         text whitespace=tabwidth=2
+*.cmakein       text whitespace=tabwidth=2
+*.in            text whitespace=tabwidth=2
+CMakeLists.txt  text whitespace=tabwidth=2
 
-*.png       binary
-*.jepg      binary
-*.jpg       binary
+*.avi       binary
+*.bmp       binary
 *.exr       binary
 *.ico       binary
+*.jpeg      binary
+*.jpg       binary
+*.png       binary
 
 *.a         binary
 *.so        binary
 *.dll       binary
+*.jar       binary
 
 *.pdf       binary
 *.pbxproj   binary
 *.vec       binary
 *.doc       binary
+*.dia       binary
 
-*.css_t     text
-*.qrc       text
-*.qss       text
-*.S         text
+*.xml                      -text whitespace=cr-at-eol
+*.yml                      -text whitespace=cr-at-eol
+.project                   -text whitespace=cr-at-eol merge=union
+.classpath                 -text whitespace=cr-at-eol merge=union
+.cproject                  -text whitespace=cr-at-eol merge=union
+org.eclipse.jdt.core.prefs -text whitespace=cr-at-eol merge=union
 
-*.xml       -text
-*.yml       -text
-
-*.vcproj    text eol=crlf merge=union
-*.cproject  text eol=crlf merge=union
 *.bat       text eol=crlf
 *.cmd       text eol=crlf
 *.cmd.tmpl  text eol=crlf
+*.dsp       text eol=crlf -whitespace
+*.sln       text eol=crlf -whitespace
+*.vcproj    text eol=crlf -whitespace merge=union
+*.vcxproj   text eol=crlf -whitespace merge=union
 
 *.sh        text eol=lf

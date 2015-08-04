@@ -5,6 +5,7 @@
  */
 
 #include "opencv2/imgproc/imgproc.hpp"
+#include "opencv2/imgcodecs.hpp"
 #include "opencv2/highgui/highgui.hpp"
 #include <math.h>
 #include <stdlib.h>
@@ -31,8 +32,8 @@ int main( void )
   printf( " * [ESC] -> Close program \n \n" );
 
   /// Test image - Make sure it s divisible by 2^{n}
-  src = imread( "../images/chicky_512.png" );
-  if( !src.data )
+  src = imread( "../data/chicky_512.png" );
+  if( src.empty() )
     { printf(" No data! -- Exiting the program \n");
       return -1; }
 
@@ -40,7 +41,7 @@ int main( void )
   dst = tmp;
 
   /// Create window
-  namedWindow( window_name, CV_WINDOW_AUTOSIZE );
+  namedWindow( window_name, WINDOW_AUTOSIZE );
   imshow( window_name, dst );
 
   /// Loop
@@ -66,10 +67,3 @@ int main( void )
 
    return 0;
 }
-
-
-
-
-
-
-

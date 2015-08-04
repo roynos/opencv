@@ -92,20 +92,10 @@ namespace cv{
         }
         void operator()(int r, int c, int l){
             int *row = &statsv.at<int>(l, 0);
-            if(c > row[CC_STAT_WIDTH]){
-                row[CC_STAT_WIDTH] = c;
-            }else{
-                if(c < row[CC_STAT_LEFT]){
-                    row[CC_STAT_LEFT] = c;
-                }
-            }
-            if(r > row[CC_STAT_HEIGHT]){
-                row[CC_STAT_HEIGHT] = r;
-            }else{
-                if(r < row[CC_STAT_TOP]){
-                    row[CC_STAT_TOP] = r;
-                }
-            }
+            row[CC_STAT_LEFT] = MIN(row[CC_STAT_LEFT], c);
+            row[CC_STAT_WIDTH] = MAX(row[CC_STAT_WIDTH], c);
+            row[CC_STAT_TOP] = MIN(row[CC_STAT_TOP], r);
+            row[CC_STAT_HEIGHT] = MAX(row[CC_STAT_HEIGHT], r);
             row[CC_STAT_AREA]++;
             Point2ui64 &integral = integrals[l];
             integral.x += c;
@@ -114,9 +104,7 @@ namespace cv{
         void finish(){
             for(int l = 0; l < statsv.rows; ++l){
                 int *row = &statsv.at<int>(l, 0);
-                row[CC_STAT_LEFT] = std::min(row[CC_STAT_LEFT], row[CC_STAT_WIDTH]);
                 row[CC_STAT_WIDTH] = row[CC_STAT_WIDTH] - row[CC_STAT_LEFT] + 1;
-                row[CC_STAT_TOP] = std::min(row[CC_STAT_TOP], row[CC_STAT_HEIGHT]);
                 row[CC_STAT_HEIGHT] = row[CC_STAT_HEIGHT] - row[CC_STAT_TOP] + 1;
 
                 Point2ui64 &integral = integrals[l];
@@ -207,20 +195,18 @@ namespace cv{
         CV_Assert(connectivity == 8 || connectivity == 4);
         const int rows = L.rows;
         const int cols = L.cols;
-        size_t Plength = (size_t(rows + 3 - 1)/3) * (size_t(cols + 3 - 1)/3);
-        if(connectivity == 4){
-            Plength = 4 * Plength;//a quick and dirty upper bound, an exact answer exists if you want to find it
-            //the 4 comes from the fact that a 3x3 block can never have more than 4 unique labels
-        }
+        //A quick and dirty upper bound for the maximimum number of labels.  The 4 comes from
+        //the fact that a 3x3 block can never have more than 4 unique labels for both 4 & 8-way
+        const size_t Plength = 4 * (size_t(rows + 3 - 1)/3) * (size_t(cols + 3 - 1)/3);
         LabelT *P = (LabelT *) fastMalloc(sizeof(LabelT) * Plength);
         P[0] = 0;
         LabelT lunique = 1;
         //scanning phase
         for(int r_i = 0; r_i < rows; ++r_i){
-            LabelT *Lrow = (LabelT *)(L.data + L.step.p[0] * r_i);
-            LabelT *Lrow_prev = (LabelT *)(((char *)Lrow) - L.step.p[0]);
-            const PixelT *Irow = (PixelT *)(I.data + I.step.p[0] * r_i);
-            const PixelT *Irow_prev = (const PixelT *)(((char *)Irow) - I.step.p[0]);
+            LabelT * const Lrow = L.ptr<LabelT>(r_i);
+            LabelT * const Lrow_prev = (LabelT *)(((char *)Lrow) - L.step.p[0]);
+            const PixelT * const Irow = I.ptr<PixelT>(r_i);
+            const PixelT * const Irow_prev = (const PixelT *)(((char *)Irow) - I.step.p[0]);
             LabelT *Lrows[2] = {
                 Lrow,
                 Lrow_prev
@@ -329,7 +315,7 @@ namespace cv{
         sop.init(nLabels);
 
         for(int r_i = 0; r_i < rows; ++r_i){
-            LabelT *Lrow_start = (LabelT *)(L.data + L.step.p[0] * r_i);
+            LabelT *Lrow_start = L.ptr<LabelT>(r_i);
             LabelT *Lrow_end = Lrow_start + cols;
             LabelT *Lrow = Lrow_start;
             for(int c_i = 0; Lrow != Lrow_end; ++Lrow, ++c_i){
@@ -399,7 +385,7 @@ int cv::connectedComponentsWithStats(InputArray _img, OutputArray _labels, Outpu
     const cv::Mat img = _img.getMat();
     _labels.create(img.size(), CV_MAT_DEPTH(ltype));
     cv::Mat labels = _labels.getMat();
-    connectedcomponents::CCStatsOp sop(statsv, centroids); 
+    connectedcomponents::CCStatsOp sop(statsv, centroids);
     if(ltype == CV_16U){
         return connectedComponents_sub1(img, labels, connectivity, sop);
     }else if(ltype == CV_32S){

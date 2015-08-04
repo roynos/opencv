@@ -5,6 +5,7 @@
  */
 
 #include "opencv2/highgui/highgui.hpp"
+#include "opencv2/imgcodecs.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include <iostream>
 #include <stdio.h>
@@ -22,7 +23,7 @@ int main( int, char** argv )
   /// Load image
   src = imread( argv[1], 1 );
 
-  if( !src.data )
+  if( src.empty() )
     { return -1; }
 
   /// Separate the image in 3 places ( B, G and R )
@@ -71,7 +72,7 @@ int main( int, char** argv )
   }
 
   /// Display
-  namedWindow("calcHist Demo", CV_WINDOW_AUTOSIZE );
+  namedWindow("calcHist Demo", WINDOW_AUTOSIZE );
   imshow("calcHist Demo", histImage );
 
   waitKey(0);

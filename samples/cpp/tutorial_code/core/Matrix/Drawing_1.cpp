@@ -3,8 +3,9 @@
  * @brief Simple sample code
  */
 
-#include <opencv2/core/core.hpp>
-#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/core.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/highgui.hpp>
 
 #define w 400
 
@@ -64,9 +65,9 @@ int main( void ){
 
   /// 3. Display your stuff!
   imshow( atom_window, atom_image );
-  cvMoveWindow( atom_window, 0, 200 );
+  moveWindow( atom_window, 0, 200 );
   imshow( rook_window, rook_image );
-  cvMoveWindow( rook_window, w, 200 );
+  moveWindow( rook_window, w, 200 );
 
   waitKey( 0 );
   return(0);
@@ -168,5 +169,3 @@ void MyLine( Mat img, Point start, Point end )
     thickness,
     lineType );
 }
-
-

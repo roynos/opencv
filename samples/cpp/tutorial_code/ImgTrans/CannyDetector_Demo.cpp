@@ -5,6 +5,7 @@
  */
 
 #include "opencv2/imgproc/imgproc.hpp"
+#include "opencv2/imgcodecs.hpp"
 #include "opencv2/highgui/highgui.hpp"
 #include <stdlib.h>
 #include <stdio.h>
@@ -51,17 +52,17 @@ int main( int, char** argv )
   /// Load an image
   src = imread( argv[1] );
 
-  if( !src.data )
+  if( src.empty() )
     { return -1; }
 
   /// Create a matrix of the same type and size as src (for dst)
   dst.create( src.size(), src.type() );
 
   /// Convert the image to grayscale
-  cvtColor( src, src_gray, CV_BGR2GRAY );
+  cvtColor( src, src_gray, COLOR_BGR2GRAY );
 
   /// Create a window
-  namedWindow( window_name, CV_WINDOW_AUTOSIZE );
+  namedWindow( window_name, WINDOW_AUTOSIZE );
 
   /// Create a Trackbar for user to enter threshold
   createTrackbar( "Min Threshold:", window_name, &lowThreshold, max_lowThreshold, CannyThreshold );

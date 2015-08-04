@@ -44,7 +44,41 @@
 #include "opencv2/videostab/wobble_suppression.hpp"
 #include "opencv2/videostab/ring_buffer.hpp"
 
-using namespace std;
+#include "opencv2/core/private.cuda.hpp"
+
+#ifdef HAVE_OPENCV_CUDAWARPING
+#  include "opencv2/cudawarping.hpp"
+#endif
+
+#if defined(HAVE_OPENCV_CUDAWARPING)
+    #if !defined HAVE_CUDA || defined(CUDA_DISABLER)
+        namespace cv { namespace cuda {
+            static void calcWobbleSuppressionMaps(int, int, int, Size, const Mat&, const Mat&, GpuMat&, GpuMat&) { throw_no_cuda(); }
+        }}
+    #else
+        namespace cv { namespace cuda { namespace device { namespace globmotion {
+            void calcWobbleSuppressionMaps(
+                    int left, int idx, int right, int width, int height,
+                    const float *ml, const float *mr, PtrStepSzf mapx, PtrStepSzf mapy);
+        }}}}
+        namespace cv { namespace cuda {
+            static void calcWobbleSuppressionMaps(
+                    int left, int idx, int right, Size size, const Mat &ml, const Mat &mr,
+                    GpuMat &mapx, GpuMat &mapy)
+            {
+                CV_Assert(ml.size() == Size(3, 3) && ml.type() == CV_32F && ml.isContinuous());
+                CV_Assert(mr.size() == Size(3, 3) && mr.type() == CV_32F && mr.isContinuous());
+
+                mapx.create(size, CV_32F);
+                mapy.create(size, CV_32F);
+
+                cv::cuda::device::globmotion::calcWobbleSuppressionMaps(
+                            left, idx, right, size.width, size.height,
+                            ml.ptr<float>(), mr.ptr<float>(), mapx, mapy);
+            }
+        }}
+    #endif
+#endif
 
 namespace cv
 {
@@ -53,7 +87,7 @@ namespace videostab
 
 WobbleSuppressorBase::WobbleSuppressorBase() : motions_(0), stabilizationMotions_(0)
 {
-    setMotionEstimator(new KeypointBasedMotionEstimator(new MotionEstimatorRansacL2(MM_HOMOGRAPHY)));
+    setMotionEstimator(makePtr<KeypointBasedMotionEstimator>(makePtr<MotionEstimatorRansacL2>(MM_HOMOGRAPHY)));
 }
 
 
@@ -114,9 +148,8 @@ void MoreAccurateMotionWobbleSuppressor::suppress(int idx, const Mat &frame, Mat
     remap(frame, result, mapx_, mapy_, INTER_LINEAR, BORDER_REPLICATE);
 }
 
-
-#ifdef HAVE_OPENCV_GPU
-void MoreAccurateMotionWobbleSuppressorGpu::suppress(int idx, const gpu::GpuMat &frame, gpu::GpuMat &result)
+#if defined(HAVE_OPENCV_CUDAWARPING)
+void MoreAccurateMotionWobbleSuppressorGpu::suppress(int idx, const cuda::GpuMat &frame, cuda::GpuMat &result)
 {
     CV_Assert(motions_ && stabilizationMotions_);
 
@@ -134,12 +167,12 @@ void MoreAccurateMotionWobbleSuppressorGpu::suppress(int idx, const gpu::GpuMat 
     Mat ML = S1 * getMotion(k1, idx, *motions2_) * getMotion(k1, idx, *motions_).inv() * S1.inv();
     Mat MR = S1 * getMotion(idx, k2, *motions2_).inv() * getMotion(idx, k2, *motions_) * S1.inv();
 
-    gpu::calcWobbleSuppressionMaps(k1, idx, k2, frame.size(), ML, MR, mapx_, mapy_);
+    cuda::calcWobbleSuppressionMaps(k1, idx, k2, frame.size(), ML, MR, mapx_, mapy_);
 
     if (result.data == frame.data)
-        result = gpu::GpuMat(frame.size(), frame.type());
+        result = cuda::GpuMat(frame.size(), frame.type());
 
-    gpu::remap(frame, result, mapx_, mapy_, INTER_LINEAR, BORDER_REPLICATE);
+    cuda::remap(frame, result, mapx_, mapy_, INTER_LINEAR, BORDER_REPLICATE);
 }
 
 
@@ -153,4 +186,3 @@ void MoreAccurateMotionWobbleSuppressorGpu::suppress(int idx, const Mat &frame, 
 
 } // namespace videostab
 } // namespace cv
-

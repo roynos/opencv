@@ -2,9 +2,10 @@
 
 #include <opencv2/imgproc/imgproc.hpp>  // Gaussian Blur
 #include <opencv2/core/core.hpp>        // Basic OpenCV structures (cv::Mat, Scalar)
+#include <opencv2/videoio/videoio.hpp>
 #include <opencv2/highgui/highgui.hpp>  // OpenCV window I/O
 #include <opencv2/features2d/features2d.hpp>
-#include <opencv2/contrib/detection_based_tracker.hpp>
+#include <opencv2/objdetect/objdetect.hpp>
 
 #include <stdio.h>
 #include <string>
@@ -22,7 +23,7 @@ class CascadeDetectorAdapter: public DetectionBasedTracker::IDetector
             IDetector(),
             Detector(detector)
         {
-            CV_Assert(!detector.empty());
+            CV_Assert(detector);
         }
 
         void detect(const cv::Mat &Image, std::vector<cv::Rect> &objects)
@@ -51,11 +52,11 @@ int main(int , char** )
     }
 
     std::string cascadeFrontalfilename = "../../data/lbpcascades/lbpcascade_frontalface.xml";
-    cv::Ptr<cv::CascadeClassifier> cascade = new cv::CascadeClassifier(cascadeFrontalfilename);
-    cv::Ptr<DetectionBasedTracker::IDetector> MainDetector = new CascadeDetectorAdapter(cascade);
+    cv::Ptr<cv::CascadeClassifier> cascade = makePtr<cv::CascadeClassifier>(cascadeFrontalfilename);
+    cv::Ptr<DetectionBasedTracker::IDetector> MainDetector = makePtr<CascadeDetectorAdapter>(cascade);
 
-    cascade = new cv::CascadeClassifier(cascadeFrontalfilename);
-    cv::Ptr<DetectionBasedTracker::IDetector> TrackingDetector = new CascadeDetectorAdapter(cascade);
+    cascade = makePtr<cv::CascadeClassifier>(cascadeFrontalfilename);
+    cv::Ptr<DetectionBasedTracker::IDetector> TrackingDetector = makePtr<CascadeDetectorAdapter>(cascade);
 
     DetectionBasedTracker::Parameters params;
     DetectionBasedTracker Detector(MainDetector, TrackingDetector, params);
@@ -79,12 +80,12 @@ int main(int , char** )
 
         for (size_t i = 0; i < Faces.size(); i++)
         {
-            rectangle(ReferenceFrame, Faces[i], CV_RGB(0,255,0));
+            rectangle(ReferenceFrame, Faces[i], Scalar(0,255,0));
         }
 
         imshow(WindowName, ReferenceFrame);
 
-        if (cvWaitKey(30) >= 0) break;
+        if (waitKey(30) >= 0) break;
     }
 
     Detector.stop();
